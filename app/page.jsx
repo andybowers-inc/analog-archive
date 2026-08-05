@@ -8,6 +8,8 @@ import {
   loadRolls, saveRolls,
   THUMB_BGS, STATUS_LABELS, PILL_MAP, DOT_COLORS, PP_LABELS,
 } from "../lib/store";
+const [editingSession, setEditingSession] = useState(null);
+const [sessionModalOpen, setSessionModalOpen] = useState(false);
 
 /* ─── small helpers ─── */
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
