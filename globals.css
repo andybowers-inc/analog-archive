@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; padding: 0; background: #F7F6F3; }
+
+/* Status pills */
+.pill-developed { background: #EAF3DE; color: #3B6D11; }
+.pill-lab       { background: #FAEEDA; color: #854F0B; }
+.pill-shot      { background: #F1EFE8; color: #5F5E5A; }
+
+/* Push/pull pills */
+.push-pill { background: #E6F1FB; color: #185FA5; }
+.pull-pill  { background: #FAEEDA; color: #854F0B; }
+
+/* Scan type tags */
+.tag-color { background: #E6F1FB; color: #185FA5; }
+.tag-bw    { background: #F1EFE8; color: #5F5E5A; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D8D7D0; border-radius: 4px; }
