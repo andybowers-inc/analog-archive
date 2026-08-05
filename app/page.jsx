@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Sidebar from "../components/Sidebar";
 import RollModal from "../components/RollModal";
 import FrameModal from "../components/FrameModal";
@@ -245,39 +245,180 @@ function RollDetail({ roll, onBack, onEdit, onFrameClick }) {
 
 function ScansPanel({ rolls }) {
   const [filter, setFilter] = useState("all");
+  const [uploadedScans, setUploadedScans] = useState([]);
+  const [dragging, setDragging] = useState(false);
+  const [lightboxScan, setLightboxScan] = useState(null);
+  const fileInputRef = useRef(null);
+
   const developed = rolls.filter(r => r.status === "developed");
-  const items = [];
-  developed.forEach(r => { for(let i=1;i<=6;i++) items.push({roll:r,frame:i,color:i%3!==0&&r.color}); });
-  const filtered = filter==="all" ? items : items.filter(x => filter==="color" ? x.color : !x.color);
+
+  const processFiles = (files) => {
+    const accepted = Array.from(files).filter(f =>
+      f.type.startsWith("image/") || f.name.toLowerCase().endsWith(".tif") || f.name.toLowerCase().endsWith(".tiff")
+    );
+    accepted.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setUploadedScans(prev => [...prev, {
+          id: Date.now() + Math.random(),
+          name: file.name,
+          src: e.target.result,
+          size: file.size,
+          type: file.type,
+          color: !file.name.toLowerCase().includes("bw") && !file.name.toLowerCase().includes("b&w"),
+          roll: "",
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileInput = (e) => { if (e.target.files?.length) processFiles(e.target.files); };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    if (e.dataTransfer.files?.length) processFiles(e.dataTransfer.files);
+  };
+
+  const handleDragOver = (e) => { e.preventDefault(); setDragging(true); };
+  const handleDragLeave = () => setDragging(false);
+  const removeUpload = (id) => setUploadedScans(prev => prev.filter(s => s.id !== id));
+
+  const allItems = [
+    ...uploadedScans.map(s => ({ type:"uploaded", scan:s, color:s.color })),
+    ...developed.flatMap(r =>
+      Array.from({ length: Math.min(r.frames, 6) }, (_, i) => ({
+        type:"placeholder", roll:r, frame:i+1, color:(i+1)%3!==0&&r.color
+      }))
+    )
+  ];
+  const filtered = filter==="all" ? allItems : allItems.filter(x => filter==="color" ? x.color : !x.color);
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E4DF]">
-        <div><p className="text-[15px] font-medium text-[#1A1A18]">Scans</p><p className="text-xs text-[#9A9990] mt-0.5">Untouched negatives, organized by roll</p></div>
+        <div>
+          <p className="text-[15px] font-medium text-[#1A1A18]">Scans</p>
+          <p className="text-xs text-[#9A9990] mt-0.5">Untouched negatives, organized by roll</p>
+        </div>
+        {uploadedScans.length > 0 && (
+          <span className="text-xs text-[#9A9990]">{uploadedScans.length} scan{uploadedScans.length!==1?"s":""} uploaded</span>
+        )}
       </div>
       <div className="p-6">
-        <div className="border border-dashed border-[#D8D7D0] rounded-xl p-6 text-center mb-6">
-          <p className="text-2xl text-[#9A9990] mb-1">☁</p>
-          <p className="text-sm font-medium text-[#1A1A18] mb-1">Upload raw scans</p>
-          <p className="text-xs text-[#9A9990] mb-3">Drag and drop TIF or JPEG — stored untouched.</p>
-          <button className="px-4 py-1.5 border border-[#D8D7D0] rounded-lg text-xs text-[#4A4A46] hover:bg-[#F7F6F3]">Browse files</button>
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,.tif,.tiff"
+          className="hidden"
+          onChange={handleFileInput}
+        />
+
+        {/* Drop zone */}
+        <div
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          className={`border-2 border-dashed rounded-xl p-8 text-center mb-6 transition-colors cursor-pointer ${
+            dragging
+              ? "border-[#1A1A18] bg-[#F0EFEB]"
+              : "border-[#D8D7D0] hover:border-[#C8C7C0] hover:bg-[#FAFAF8]"
+          }`}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <p className="text-2xl text-[#9A9990] mb-2">{dragging ? "⬇" : "☁"}</p>
+          <p className="text-sm font-medium text-[#1A1A18] mb-1">
+            {dragging ? "Drop files to upload" : "Upload raw scans"}
+          </p>
+          <p className="text-xs text-[#9A9990] mb-3">
+            Drag and drop here, or click anywhere in this box to browse your files.
+          </p>
+          <button
+            onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
+            className="px-4 py-1.5 border border-[#D8D7D0] rounded-lg text-xs text-[#4A4A46] hover:bg-[#EEEEE8] transition-colors"
+          >
+            Browse files
+          </button>
+          <p className="text-[10px] text-[#C0BFB8] mt-2">JPEG, PNG, TIF, TIFF accepted</p>
         </div>
-        <div className="flex gap-1.5 mb-4">
-          {["all","color","bw"].map(f => (
-            <button key={f} onClick={()=>setFilter(f)}
-              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filter===f?"bg-[#1A1A18] text-white border-[#1A1A18]":"border-[#D8D7D0] text-[#4A4A46] hover:bg-[#F7F6F3]"}`}>
-              {f==="all"?"All":f==="color"?"Color":"B&W"}
-            </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-6 gap-2">
-          {filtered.map(({roll,frame,color},i) => (
-            <div key={i} className="aspect-square bg-white border border-[#E5E4DF] rounded-lg flex items-center justify-center relative overflow-hidden cursor-pointer hover:border-[#C8C7C0]">
-              <span className="text-[9px] text-[#9A9990]">{roll.id}-0{frame}</span>
-              <span className={`${color?"tag-color":"tag-bw"} absolute bottom-1 left-1 text-[8px] px-1 py-px rounded font-medium`}>{color?"C":"B&W"}</span>
+
+        {/* Uploaded scans — previews */}
+        {uploadedScans.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-medium text-[#1A1A18]">Uploaded scans</p>
+              <button onClick={()=>setUploadedScans([])} className="text-xs text-[#9A9990] hover:text-red-600">Clear all</button>
             </div>
-          ))}
-        </div>
+            <div className="grid grid-cols-5 gap-2">
+              {uploadedScans.map(scan => (
+                <div key={scan.id} className="relative group aspect-square rounded-lg overflow-hidden border border-[#E5E4DF] cursor-pointer hover:border-[#C8C7C0]"
+                  onClick={() => setLightboxScan(scan)}>
+                  <img src={scan.src} alt={scan.name} className="w-full h-full object-cover"/>
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors"/>
+                  <button
+                    onClick={e=>{ e.stopPropagation(); removeUpload(scan.id); }}
+                    className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] transition-opacity"
+                  >✕</button>
+                  <span className={`${scan.color?"tag-color":"tag-bw"} absolute bottom-1 left-1 text-[8px] px-1 py-px rounded font-medium`}>
+                    {scan.color?"C":"B&W"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Roll placeholders */}
+        {developed.length > 0 && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-medium text-[#1A1A18]">Developed rolls</p>
+              <div className="flex gap-1.5">
+                {["all","color","bw"].map(f => (
+                  <button key={f} onClick={()=>setFilter(f)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filter===f?"bg-[#1A1A18] text-white border-[#1A1A18]":"border-[#D8D7D0] text-[#4A4A46] hover:bg-[#F7F6F3]"}`}>
+                    {f==="all"?"All":f==="color"?"Color":"B&W"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-6 gap-2">
+              {developed.flatMap(r =>
+                Array.from({ length: Math.min(r.frames, 6) }, (_, i) => {
+                  const n = i+1;
+                  const color = n%3!==0&&r.color;
+                  if (filter!=="all" && (filter==="color"?!color:color)) return null;
+                  return (
+                    <div key={`${r.id}-${n}`} className="aspect-square bg-white border border-[#E5E4DF] rounded-lg flex items-center justify-center relative overflow-hidden cursor-pointer hover:border-[#C8C7C0]">
+                      <span className="text-[9px] text-[#9A9990]">{r.id}-0{n}</span>
+                      <span className={`${color?"tag-color":"tag-bw"} absolute bottom-1 left-1 text-[8px] px-1 py-px rounded font-medium`}>{color?"C":"B&W"}</span>
+                    </div>
+                  );
+                }).filter(Boolean)
+              )}
+            </div>
+          </>
+        )}
+
+        {developed.length === 0 && uploadedScans.length === 0 && (
+          <p className="text-center text-sm text-[#9A9990] mt-4">No developed rolls yet — scans will appear here once rolls are marked as developed.</p>
+        )}
       </div>
+
+      {/* Scan lightbox */}
+      {lightboxScan && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-6" onClick={()=>setLightboxScan(null)}>
+          <button className="absolute top-4 right-4 text-white/50 hover:text-white text-2xl">✕</button>
+          <div className="max-w-3xl max-h-full flex flex-col items-center gap-3" onClick={e=>e.stopPropagation()}>
+            <img src={lightboxScan.src} alt={lightboxScan.name} className="max-h-[75vh] max-w-full object-contain rounded-lg"/>
+            <p className="text-white/60 text-xs">{lightboxScan.name} · {(lightboxScan.size/1024/1024).toFixed(1)} MB</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
