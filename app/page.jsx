@@ -488,3 +488,41 @@ export default function App() {
     </div>
   );
 }
+{sessionModalOpen && editingSession && (
+  <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+    <div className="bg-white border border-[#E5E4DF] rounded-xl w-full max-w-sm">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E4DF]">
+        <h2 className="text-sm font-medium text-[#1A1A18]">Edit session</h2>
+        <button onClick={()=>setSessionModalOpen(false)} className="text-[#9A9990] hover:text-[#1A1A18] text-lg leading-none">✕</button>
+      </div>
+      <div className="px-5 py-4">
+        <div className="mb-3">
+          <label className="block text-xs font-medium text-[#4A4A46] mb-1">Session name</label>
+          <input className="w-full px-2.5 py-1.5 border border-[#D8D7D0] rounded-lg text-sm bg-[#F7F6F3] text-[#1A1A18] focus:outline-none focus:border-[#1A1A18]"
+            value={editingSession.name}
+            onChange={e=>setEditingSession({...editingSession, name:e.target.value})}/>
+        </div>
+        <div className="mb-3">
+          <label className="block text-xs font-medium text-[#4A4A46] mb-1">Location</label>
+          <input className="w-full px-2.5 py-1.5 border border-[#D8D7D0] rounded-lg text-sm bg-[#F7F6F3] text-[#1A1A18] focus:outline-none focus:border-[#1A1A18]"
+            value={editingSession.meta}
+            onChange={e=>setEditingSession({...editingSession, meta:e.target.value})}/>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-[#4A4A46] mb-1">Status</label>
+          <select className="w-full px-2.5 py-1.5 border border-[#D8D7D0] rounded-lg text-sm bg-[#F7F6F3] text-[#1A1A18] focus:outline-none focus:border-[#1A1A18]"
+            value={editingSession.status}
+            onChange={e=>setEditingSession({...editingSession, status:e.target.value})}>
+            <option value="developed">Developed</option>
+            <option value="lab">At lab</option>
+            <option value="shot">Shot</option>
+          </select>
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 px-5 py-3 border-t border-[#E5E4DF]">
+        <button onClick={()=>setSessionModalOpen(false)} className="text-sm px-4 py-1.5 border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">Cancel</button>
+        <button onClick={()=>setSessionModalOpen(false)} className="text-sm px-4 py-1.5 bg-[#1A1A18] text-white rounded-lg font-medium hover:bg-[#333]">Save</button>
+      </div>
+    </div>
+  </div>
+)}
