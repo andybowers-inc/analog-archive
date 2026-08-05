@@ -8,12 +8,27 @@ import {
   loadRolls, saveRolls,
   THUMB_BGS, STATUS_LABELS, PILL_MAP, DOT_COLORS, PP_LABELS,
 } from "../lib/store";
-const [editingSession, setEditingSession] = useState(null);
-const [sessionModalOpen, setSessionModalOpen] = useState(false);
 
-/* ─── small helpers ─── */
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const nowDate = () => `${months[new Date().getMonth()]} ${new Date().getFullYear()}`;
+
+const SEED_SESSIONS = [
+  { id: 1, name: "Portraits of Aēmoni", location: "Bushwick Studio", date: "Jul 2025", rolls: 2, status: "developed" },
+  { id: 2, name: "TWA Terminal editorial", location: "JFK Airport", date: "Aug 2025", rolls: 1, status: "lab" },
+  { id: 3, name: "Stadium series", location: "Citi Field", date: "Sep 2025", rolls: 3, status: "shot" },
+];
+
+function loadSessions() {
+  if (typeof window === "undefined") return SEED_SESSIONS;
+  try {
+    const s = localStorage.getItem("analog-archive-sessions-v1");
+    return s ? JSON.parse(s) : SEED_SESSIONS;
+  } catch { return SEED_SESSIONS; }
+}
+function saveSessions(sessions) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("analog-archive-sessions-v1", JSON.stringify(sessions));
+}
 
 function PushPill({ pp }) {
   if (!pp || pp === "none") return null;
@@ -25,7 +40,6 @@ function StatusPill({ status }) {
   return <span className={`${PILL_MAP[status]} text-[10px] font-medium px-2 py-0.5 rounded-full`}>{STATUS_LABELS[status]}</span>;
 }
 
-/* ─── contact sheet ─── */
 function ContactSheet({ roll, onFrameClick }) {
   if (roll.status !== "developed") {
     return (
@@ -51,11 +65,8 @@ function ContactSheet({ roll, onFrameClick }) {
             ? <span className="absolute top-0.5 right-1 text-[9px] text-red-600">✕</span>
             : null;
           return (
-            <button
-              key={n}
-              onClick={() => onFrameClick(n)}
-              className="aspect-square bg-[#F7F6F3] hover:bg-[#EEEEE8] flex items-center justify-center relative transition-colors"
-            >
+            <button key={n} onClick={() => onFrameClick(n)}
+              className="aspect-square bg-[#F7F6F3] hover:bg-[#EEEEE8] flex items-center justify-center relative transition-colors">
               <span className="text-[9px] text-[#9A9990]">{roll.color ? "▪" : "◆"}</span>
               <span className={`${isColor ? "tag-color" : "tag-bw"} absolute bottom-0.5 left-0.5 text-[8px] px-1 py-px rounded font-medium`}>
                 {isColor ? "C" : "B&W"}
@@ -70,15 +81,12 @@ function ContactSheet({ roll, onFrameClick }) {
   );
 }
 
-/* ─── panels ─── */
 function Dashboard({ rolls, onNewRoll, onViewRolls, onViewScans, onRollClick, onEditRoll }) {
   const developed = rolls.filter(r => r.status === "developed");
   const labCount = rolls.filter(r => r.status === "lab").length;
   const stocks = new Set(rolls.map(r => r.stock)).size;
   const totalScans = developed.reduce((sum, r) => sum + (r.frames || 36), 0);
-  const earliestDate = rolls.length > 0
-    ? [...rolls].sort((a, b) => a.id - b.id)[0].date
-    : "your first roll";
+  const earliestDate = rolls.length > 0 ? [...rolls].sort((a, b) => a.id - b.id)[0].date : "your first roll";
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -87,13 +95,12 @@ function Dashboard({ rolls, onNewRoll, onViewRolls, onViewScans, onRollClick, on
         <button onClick={onNewRoll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">+ Add roll</button>
       </div>
       <div className="p-6">
-        {/* Stats */}
         <div className="grid grid-cols-4 gap-3 mb-6">
           {[
             { label:"Total rolls", value: rolls.length, detail:`Since ${earliestDate}` },
-            { label:"Scans",       value: totalScans, detail:"Across all rolls" },
-            { label:"At lab",      value: labCount, detail:"Pending return" },
-            { label:"Film stocks", value: stocks, detail:"Used to date" },
+            { label:"Scans",       value: totalScans,   detail:"Across all rolls" },
+            { label:"At lab",      value: labCount,     detail:"Pending return" },
+            { label:"Film stocks", value: stocks,        detail:"Used to date" },
           ].map(s => (
             <div key={s.label} className="bg-white border border-[#E5E4DF] rounded-xl p-4">
               <p className="text-[10px] font-medium text-[#9A9990] uppercase tracking-wide mb-1.5">{s.label}</p>
@@ -102,8 +109,6 @@ function Dashboard({ rolls, onNewRoll, onViewRolls, onViewScans, onRollClick, on
             </div>
           ))}
         </div>
-
-        {/* Recent rolls */}
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-[#1A1A18]">Recent rolls</p>
           <button onClick={onViewRolls} className="text-xs text-[#9A9990] hover:text-[#4A4A46]">View all</button>
@@ -113,7 +118,7 @@ function Dashboard({ rolls, onNewRoll, onViewRolls, onViewScans, onRollClick, on
             <div key={r.id} className="bg-white border border-[#E5E4DF] rounded-xl overflow-hidden cursor-pointer hover:border-[#C8C7C0] transition-colors relative group" onClick={() => onRollClick(r.id)}>
               <button className="absolute top-1.5 left-1.5 opacity-0 group-hover:opacity-100 bg-white border border-[#E5E4DF] rounded px-1.5 py-0.5 text-[10px] text-[#4A4A46] hover:bg-[#F7F6F3] z-10 transition-opacity"
                 onClick={e=>{e.stopPropagation();onEditRoll(r.id);}}>✎ Edit</button>
-              <div className="h-18 flex items-center justify-center relative" style={{height:72,background:THUMB_BGS[r.stock]||"#F1EFE8"}}>
+              <div className="flex items-center justify-center relative" style={{height:72,background:THUMB_BGS[r.stock]||"#F1EFE8"}}>
                 <span className="text-[10px] font-medium text-[#4A4A46] uppercase tracking-wide">{r.stock}</span>
                 <span className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{background:DOT_COLORS[r.status]}}/>
               </div>
@@ -124,8 +129,6 @@ function Dashboard({ rolls, onNewRoll, onViewRolls, onViewScans, onRollClick, on
             </div>
           ))}
         </div>
-
-        {/* Recent scans */}
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-[#1A1A18]">Recent scans</p>
           <button onClick={onViewScans} className="text-xs text-[#9A9990] hover:text-[#4A4A46]">View all</button>
@@ -195,25 +198,15 @@ function RollDetail({ roll, onBack, onEdit, onFrameClick }) {
           <span className="text-[#D8D7D0]">/</span>
           <p className="text-sm font-medium text-[#1A1A18]">{roll.name}</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={onEdit} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">✎ Edit roll</button>
-        </div>
+        <button onClick={onEdit} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">✎ Edit roll</button>
       </div>
       <div className="p-6">
-        {/* Hero */}
         <div className="bg-[#F7F6F3] border border-[#E5E4DF] rounded-xl p-5 mb-4 flex gap-5 items-start">
           <div className="w-20 h-20 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:THUMB_BGS[roll.stock]||"#F1EFE8"}}>
             <span className="text-[9px] font-medium text-[#4A4A46] uppercase tracking-wide text-center leading-relaxed px-1">{roll.stock}</span>
           </div>
           <div className="grid grid-cols-3 gap-x-6 gap-y-3 flex-1">
-            {[
-              ["Camera",     roll.camera],
-              ["Lens",       roll.lens || "—"],
-              ["Format",     roll.format],
-              ["ISO metered",roll.iso],
-              ["Box speed",  roll.box || "—"],
-              ["Dev process",roll.process],
-            ].map(([l,v]) => (
+            {[["Camera",roll.camera],["Lens",roll.lens||"—"],["Format",roll.format],["ISO metered",roll.iso],["Box speed",roll.box||"—"],["Dev process",roll.process]].map(([l,v])=>(
               <div key={l}>
                 <p className="text-[10px] font-medium text-[#9A9990] uppercase tracking-wide mb-0.5">{l}</p>
                 <p className="text-sm font-medium text-[#1A1A18]">{v}</p>
@@ -221,9 +214,8 @@ function RollDetail({ roll, onBack, onEdit, onFrameClick }) {
             ))}
             <div>
               <p className="text-[10px] font-medium text-[#9A9990] uppercase tracking-wide mb-0.5">Push / pull</p>
-              {ppCls
-                ? <span className={`${ppCls} text-xs font-medium px-2 py-0.5 rounded-full`}>{ppLabel}</span>
-                : <p className="text-sm font-medium text-[#1A1A18]">Normal</p>}
+              {ppCls ? <span className={`${ppCls} text-xs font-medium px-2 py-0.5 rounded-full`}>{ppLabel}</span>
+                     : <p className="text-sm font-medium text-[#1A1A18]">Normal</p>}
             </div>
             <div>
               <p className="text-[10px] font-medium text-[#9A9990] uppercase tracking-wide mb-0.5">Status</p>
@@ -231,21 +223,17 @@ function RollDetail({ roll, onBack, onEdit, onFrameClick }) {
             </div>
             <div>
               <p className="text-[10px] font-medium text-[#9A9990] uppercase tracking-wide mb-0.5">Session</p>
-              <p className="text-sm font-medium text-[#1A1A18]">{roll.session || "—"}</p>
+              <p className="text-sm font-medium text-[#1A1A18]">{roll.session||"—"}</p>
             </div>
           </div>
         </div>
-
-        {roll.location && (
-          <p className="text-xs text-[#9A9990] mb-3 flex items-center gap-1">📍 {roll.location}</p>
-        )}
+        {roll.location && <p className="text-xs text-[#9A9990] mb-3 flex items-center gap-1">📍 {roll.location}</p>}
         {roll.notes && (
           <div className="bg-[#F7F6F3] rounded-xl p-4 mb-4">
             <p className="text-[10px] font-medium text-[#9A9990] uppercase tracking-wide mb-1.5">Notes</p>
             <p className="text-sm text-[#4A4A46] leading-relaxed">{roll.notes}</p>
           </div>
         )}
-
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-[#1A1A18]">Contact sheet</p>
         </div>
@@ -306,25 +294,85 @@ function SimplePanel({ title, sub, children }) {
   );
 }
 
-/* ─── main app ─── */
+const INP = "w-full px-2.5 py-1.5 border border-[#D8D7D0] rounded-lg text-sm bg-[#F7F6F3] text-[#1A1A18] focus:outline-none focus:border-[#1A1A18]";
+const LBL = "block text-xs font-medium text-[#4A4A46] mb-1";
+
+function SessionModal({ session, onSave, onDelete, onClose }) {
+  const [form, setForm] = useState({ name:"", location:"", date:"", rolls:0, status:"shot" });
+  useEffect(() => { if (session) setForm({ ...session }); }, [session]);
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const isEdit = !!session?.id;
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+      <div className="bg-white border border-[#E5E4DF] rounded-xl w-full max-w-sm flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E4DF]">
+          <h2 className="text-sm font-medium text-[#1A1A18]">{isEdit ? "Edit session" : "New session"}</h2>
+          <button onClick={onClose} className="text-[#9A9990] hover:text-[#1A1A18] text-lg leading-none">✕</button>
+        </div>
+        <div className="px-5 py-4">
+          <div className="mb-3">
+            <label className={LBL}>Session name</label>
+            <input className={INP} value={form.name} onChange={e=>set("name",e.target.value)} placeholder="e.g. Portraits of Aēmoni"/>
+          </div>
+          <div className="mb-3">
+            <label className={LBL}>Location</label>
+            <input className={INP} value={form.location} onChange={e=>set("location",e.target.value)} placeholder="e.g. Bushwick Studio"/>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className={LBL}>Date</label>
+              <input className={INP} value={form.date} onChange={e=>set("date",e.target.value)} placeholder="e.g. Jul 2025"/>
+            </div>
+            <div>
+              <label className={LBL}>Number of rolls</label>
+              <input className={INP} type="number" min="0" value={form.rolls} onChange={e=>set("rolls",parseInt(e.target.value)||0)}/>
+            </div>
+          </div>
+          <div>
+            <label className={LBL}>Status</label>
+            <select className={INP} value={form.status} onChange={e=>set("status",e.target.value)}>
+              <option value="developed">Developed</option>
+              <option value="lab">At lab</option>
+              <option value="shot">Shot</option>
+            </select>
+          </div>
+        </div>
+        <div className="flex items-center justify-between px-5 py-3 border-t border-[#E5E4DF]">
+          {isEdit
+            ? <button onClick={()=>onDelete(session.id)} className="text-xs text-red-700 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50">✕ Delete</button>
+            : <div/>}
+          <div className="flex gap-2">
+            <button onClick={onClose} className="text-sm px-4 py-1.5 border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">Cancel</button>
+            <button onClick={()=>onSave(form)} className="text-sm px-4 py-1.5 bg-[#1A1A18] text-white rounded-lg font-medium hover:bg-[#333]">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [rolls, setRolls] = useState([]);
+  const [sessions, setSessions] = useState([]);
   const [panel, setPanel] = useState("dashboard");
   const [rollFilter, setRollFilter] = useState("all");
   const [detailId, setDetailId] = useState(null);
-  const [rollModal, setRollModal] = useState(null); // null | "new" | rollId
-  const [frameModal, setFrameModal] = useState(null); // null | { rollId, frame }
-  const [lightbox, setLightbox] = useState(null); // null | { rollId, frame }
+  const [rollModal, setRollModal] = useState(null);
+  const [frameModal, setFrameModal] = useState(null);
+  const [lightbox, setLightbox] = useState(null);
+  const [sessionModal, setSessionModal] = useState(null);
   const [toast, setToast] = useState("");
 
-  useEffect(() => { setRolls(loadRolls()); }, []);
+  useEffect(() => {
+    setRolls(loadRolls());
+    setSessions(loadSessions());
+  }, []);
 
   const persist = (next) => { setRolls(next); saveRolls(next); };
+  const persistSessions = (next) => { setSessions(next); saveSessions(next); };
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(""), 2000);
-  };
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2000); };
 
   const handleSaveRoll = (form) => {
     const isEdit = typeof rollModal === "number";
@@ -333,7 +381,7 @@ export default function App() {
       showToast("Roll updated");
       openDetail(rollModal);
     } else {
-      const next = [{ id: Date.now(), ...form, date: nowDate(), frames: 36, color: form.stock !== "Kentmere Pan 400", frames_data: {} }, ...rolls];
+      const next = [{ id: Date.now(), ...form, date: nowDate(), color: form.stock !== "Kentmere Pan 400", frames_data: {} }, ...rolls];
       persist(next);
       showToast("Roll added");
     }
@@ -349,16 +397,29 @@ export default function App() {
 
   const handleSaveFrame = (form) => {
     const { rollId, frame } = frameModal;
-    persist(rolls.map(r => r.id === rollId
-      ? { ...r, frames_data: { ...r.frames_data, [frame]: form } }
-      : r));
+    persist(rolls.map(r => r.id === rollId ? { ...r, frames_data: { ...r.frames_data, [frame]: form } } : r));
     setFrameModal(null);
     showToast("Frame saved");
   };
 
-  const openDetail = (id) => { setDetailId(id); setPanel("detail"); };
+  const handleSaveSession = (form) => {
+    if (form.id) {
+      persistSessions(sessions.map(s => s.id === form.id ? { ...s, ...form } : s));
+      showToast("Session updated");
+    } else {
+      persistSessions([...sessions, { ...form, id: Date.now() }]);
+      showToast("Session added");
+    }
+    setSessionModal(null);
+  };
 
-  const currentRoll = rolls.find(r => r.id === (lightbox?.rollId || frameModal?.rollId || detailId));
+  const handleDeleteSession = (id) => {
+    persistSessions(sessions.filter(s => s.id !== id));
+    setSessionModal(null);
+    showToast("Session deleted");
+  };
+
+  const openDetail = (id) => { setDetailId(id); setPanel("detail"); };
   const editingRoll = typeof rollModal === "number" ? rolls.find(r => r.id === rollModal) : null;
 
   const lbNav = useCallback((dir) => {
@@ -394,30 +455,32 @@ export default function App() {
             onFrameClick={frame=>setLightbox({rollId:detailId,frame})}
           />
         )}
-     {panel === "sessions" && (
-  <SimplePanel title="Sessions" sub="Group rolls by shoot">
-    {[
-      { name:"Portraits of Aēmoni", meta:"Bushwick Studio · Jul 2025 · 2 rolls", status:"developed" },
-      { name:"TWA Terminal editorial", meta:"JFK Airport · Aug 2025 · 1 roll", status:"lab" },
-      { name:"Stadium series", meta:"Citi Field · Sep 2025 · 3 rolls", status:"shot" },
-    ].map(s => (
-      <div key={s.name} className="bg-white border border-[#E5E4DF] rounded-xl px-4 py-3 flex items-center gap-4 mb-2 hover:border-[#C8C7C0]">
-        <div className="w-9 h-9 rounded-lg bg-[#F7F6F3] flex items-center justify-center text-[#9A9990]">⊟</div>
-        <div className="flex-1"><p className="text-sm font-medium text-[#1A1A18]">{s.name}</p><p className="text-xs text-[#9A9990] mt-0.5">{s.meta}</p></div>
-        <div className="flex items-center gap-2">
-          <StatusPill status={s.status}/>
-          <button
-            onClick={() => {
-              setEditingSession(s);
-              setSessionModalOpen(true);
-            }}
-            className="text-xs px-2.5 py-1 border border-[#D8D7D0] rounded-lg text-[#9A9990] hover:text-[#1A1A18]">✎ Edit
-          </button>
-        </div>
-      </div>
-    ))}
-  </SimplePanel>
-)}
+        {panel === "scans" && <ScansPanel rolls={rolls}/>}
+
+        {panel === "sessions" && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E4DF]">
+              <div><p className="text-[15px] font-medium text-[#1A1A18]">Sessions</p><p className="text-xs text-[#9A9990] mt-0.5">Group rolls by shoot</p></div>
+              <button onClick={()=>setSessionModal({})} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">+ New session</button>
+            </div>
+            <div className="p-6 flex flex-col gap-2">
+              {sessions.map(s => (
+                <div key={s.id} className="bg-white border border-[#E5E4DF] rounded-xl px-4 py-3 flex items-center gap-4 hover:border-[#C8C7C0] transition-colors">
+                  <div className="w-9 h-9 rounded-lg bg-[#F7F6F3] flex items-center justify-center text-[#9A9990] flex-shrink-0">⊟</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-[#1A1A18]">{s.name}</p>
+                    <p className="text-xs text-[#9A9990] mt-0.5">{s.location} · {s.date} · {s.rolls} roll{s.rolls !== 1 ? "s" : ""}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <StatusPill status={s.status}/>
+                    <button onClick={()=>setSessionModal(s)} className="text-xs px-2.5 py-1 border border-[#D8D7D0] rounded-lg text-[#9A9990] hover:text-[#1A1A18] hover:border-[#C8C7C0]">✎ Edit</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {panel === "stocks" && (
           <SimplePanel title="Film stocks" sub="All stocks used in your archive">
             {[
@@ -430,11 +493,12 @@ export default function App() {
               <div key={s.name} className="bg-white border border-[#E5E4DF] rounded-xl px-4 py-3 flex items-center gap-4 mb-2 hover:border-[#C8C7C0]">
                 <div className="w-9 h-9 rounded-lg bg-[#F7F6F3] flex items-center justify-center text-[10px] font-medium text-[#9A9990]">{s.process}</div>
                 <div className="flex-1"><p className="text-sm font-medium text-[#1A1A18]">{s.name}</p><p className="text-xs text-[#9A9990] mt-0.5">{s.meta}</p></div>
-                <div className="flex items-center gap-2"><span className="text-xs text-[#9A9990]">{s.count}</span><button className="text-xs px-2.5 py-1 border border-[#D8D7D0] rounded-lg text-[#9A9990] hover:text-[#1A1A18]">✎ Edit</button></div>
+                <div className="flex items-center gap-2"><span className="text-xs text-[#9A9990]">{s.count}</span></div>
               </div>
             ))}
           </SimplePanel>
         )}
+
         {panel === "export" && (
           <SimplePanel title="Export" sub="Download your archive in different formats">
             {[
@@ -452,22 +516,11 @@ export default function App() {
         )}
       </main>
 
-      {/* Modals */}
       {rollModal !== null && (
-        <RollModal
-          roll={editingRoll}
-          onSave={handleSaveRoll}
-          onDelete={handleDeleteRoll}
-          onClose={() => setRollModal(null)}
-        />
+        <RollModal roll={editingRoll} onSave={handleSaveRoll} onDelete={handleDeleteRoll} onClose={() => setRollModal(null)}/>
       )}
       {frameModal && (
-        <FrameModal
-          roll={rolls.find(r=>r.id===frameModal.rollId)}
-          frame={frameModal.frame}
-          onSave={handleSaveFrame}
-          onClose={() => setFrameModal(null)}
-        />
+        <FrameModal roll={rolls.find(r=>r.id===frameModal.rollId)} frame={frameModal.frame} onSave={handleSaveFrame} onClose={() => setFrameModal(null)}/>
       )}
       {lightbox && (
         <Lightbox
@@ -478,8 +531,15 @@ export default function App() {
           onEditFrame={() => { setFrameModal({rollId:lightbox.rollId, frame:lightbox.frame}); setLightbox(null); }}
         />
       )}
+      {sessionModal !== null && (
+        <SessionModal
+          session={sessionModal?.id ? sessionModal : null}
+          onSave={handleSaveSession}
+          onDelete={handleDeleteSession}
+          onClose={() => setSessionModal(null)}
+        />
+      )}
 
-      {/* Toast */}
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-[#1A1A18] text-white text-xs font-medium px-4 py-2 rounded-full z-50 shadow-lg">
           {toast}
@@ -488,41 +548,3 @@ export default function App() {
     </div>
   );
 }
-{sessionModalOpen && editingSession && (
-  <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-    <div className="bg-white border border-[#E5E4DF] rounded-xl w-full max-w-sm">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E4DF]">
-        <h2 className="text-sm font-medium text-[#1A1A18]">Edit session</h2>
-        <button onClick={()=>setSessionModalOpen(false)} className="text-[#9A9990] hover:text-[#1A1A18] text-lg leading-none">✕</button>
-      </div>
-      <div className="px-5 py-4">
-        <div className="mb-3">
-          <label className="block text-xs font-medium text-[#4A4A46] mb-1">Session name</label>
-          <input className="w-full px-2.5 py-1.5 border border-[#D8D7D0] rounded-lg text-sm bg-[#F7F6F3] text-[#1A1A18] focus:outline-none focus:border-[#1A1A18]"
-            value={editingSession.name}
-            onChange={e=>setEditingSession({...editingSession, name:e.target.value})}/>
-        </div>
-        <div className="mb-3">
-          <label className="block text-xs font-medium text-[#4A4A46] mb-1">Location</label>
-          <input className="w-full px-2.5 py-1.5 border border-[#D8D7D0] rounded-lg text-sm bg-[#F7F6F3] text-[#1A1A18] focus:outline-none focus:border-[#1A1A18]"
-            value={editingSession.meta}
-            onChange={e=>setEditingSession({...editingSession, meta:e.target.value})}/>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-[#4A4A46] mb-1">Status</label>
-          <select className="w-full px-2.5 py-1.5 border border-[#D8D7D0] rounded-lg text-sm bg-[#F7F6F3] text-[#1A1A18] focus:outline-none focus:border-[#1A1A18]"
-            value={editingSession.status}
-            onChange={e=>setEditingSession({...editingSession, status:e.target.value})}>
-            <option value="developed">Developed</option>
-            <option value="lab">At lab</option>
-            <option value="shot">Shot</option>
-          </select>
-        </div>
-      </div>
-      <div className="flex justify-end gap-2 px-5 py-3 border-t border-[#E5E4DF]">
-        <button onClick={()=>setSessionModalOpen(false)} className="text-sm px-4 py-1.5 border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">Cancel</button>
-        <button onClick={()=>setSessionModalOpen(false)} className="text-sm px-4 py-1.5 bg-[#1A1A18] text-white rounded-lg font-medium hover:bg-[#333]">Save</button>
-      </div>
-    </div>
-  </div>
-)}
