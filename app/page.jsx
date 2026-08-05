@@ -73,6 +73,10 @@ function Dashboard({ rolls, onNewRoll, onViewRolls, onViewScans, onRollClick, on
   const developed = rolls.filter(r => r.status === "developed");
   const labCount = rolls.filter(r => r.status === "lab").length;
   const stocks = new Set(rolls.map(r => r.stock)).size;
+  const totalScans = developed.reduce((sum, r) => sum + (r.frames || 36), 0);
+  const earliestDate = rolls.length > 0
+    ? [...rolls].sort((a, b) => a.id - b.id)[0].date
+    : "your first roll";
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -84,8 +88,8 @@ function Dashboard({ rolls, onNewRoll, onViewRolls, onViewScans, onRollClick, on
         {/* Stats */}
         <div className="grid grid-cols-4 gap-3 mb-6">
           {[
-            { label:"Total rolls", value: rolls.length, detail:"Since Jan 2025" },
-             { label:"Scans", value: developed.reduce((sum, r) => sum + (r.frames || 36), 0), detail:"Across all rolls" },
+            { label:"Total rolls", value: rolls.length, detail:`Since ${earliestDate}` },
+            { label:"Scans",       value: totalScans, detail:"Across all rolls" },
             { label:"At lab",      value: labCount, detail:"Pending return" },
             { label:"Film stocks", value: stocks, detail:"Used to date" },
           ].map(s => (
