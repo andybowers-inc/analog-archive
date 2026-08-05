@@ -85,7 +85,7 @@ function Dashboard({ rolls, onNewRoll, onViewRolls, onViewScans, onRollClick, on
         <div className="grid grid-cols-4 gap-3 mb-6">
           {[
             { label:"Total rolls", value: rolls.length, detail:"Since Jan 2025" },
-            { label:"Scans",       value: developed.length * 36, detail:"Across all rolls" },
+             { label:"Scans", value: developed.reduce((sum, r) => sum + (r.frames || 36), 0), detail:"Across all rolls" },
             { label:"At lab",      value: labCount, detail:"Pending return" },
             { label:"Film stocks", value: stocks, detail:"Used to date" },
           ].map(s => (
@@ -204,7 +204,6 @@ function RollDetail({ roll, onBack, onEdit, onFrameClick }) {
               ["Camera",     roll.camera],
               ["Lens",       roll.lens || "—"],
               ["Format",     roll.format],
-      { label:"Scans", value: developed.reduce((sum, r) => sum + (r.frames || 36), 0), detail:"Across all rolls" },
               ["ISO metered",roll.iso],
               ["Box speed",  roll.box || "—"],
               ["Dev process",roll.process],
