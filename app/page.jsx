@@ -392,22 +392,30 @@ export default function App() {
             onFrameClick={frame=>setLightbox({rollId:detailId,frame})}
           />
         )}
-        {panel === "scans" && <ScansPanel rolls={rolls}/>}
-        {panel === "sessions" && (
-          <SimplePanel title="Sessions" sub="Group rolls by shoot">
-            {[
-              { name:"Portraits of Aēmoni", meta:"Bushwick Studio · Jul 2025 · 2 rolls", status:"developed" },
-              { name:"TWA Terminal editorial", meta:"JFK Airport · Aug 2025 · 1 roll", status:"lab" },
-              { name:"Stadium series", meta:"Citi Field · Sep 2025 · 3 rolls", status:"shot" },
-            ].map(s => (
-              <div key={s.name} className="bg-white border border-[#E5E4DF] rounded-xl px-4 py-3 flex items-center gap-4 mb-2 hover:border-[#C8C7C0]">
-                <div className="w-9 h-9 rounded-lg bg-[#F7F6F3] flex items-center justify-center text-[#9A9990]">⊟</div>
-                <div className="flex-1"><p className="text-sm font-medium text-[#1A1A18]">{s.name}</p><p className="text-xs text-[#9A9990] mt-0.5">{s.meta}</p></div>
-                <div className="flex items-center gap-2"><StatusPill status={s.status}/><button className="text-xs px-2.5 py-1 border border-[#D8D7D0] rounded-lg text-[#9A9990] hover:text-[#1A1A18]">✎ Edit</button></div>
-              </div>
-            ))}
-          </SimplePanel>
-        )}
+     {panel === "sessions" && (
+  <SimplePanel title="Sessions" sub="Group rolls by shoot">
+    {[
+      { name:"Portraits of Aēmoni", meta:"Bushwick Studio · Jul 2025 · 2 rolls", status:"developed" },
+      { name:"TWA Terminal editorial", meta:"JFK Airport · Aug 2025 · 1 roll", status:"lab" },
+      { name:"Stadium series", meta:"Citi Field · Sep 2025 · 3 rolls", status:"shot" },
+    ].map(s => (
+      <div key={s.name} className="bg-white border border-[#E5E4DF] rounded-xl px-4 py-3 flex items-center gap-4 mb-2 hover:border-[#C8C7C0]">
+        <div className="w-9 h-9 rounded-lg bg-[#F7F6F3] flex items-center justify-center text-[#9A9990]">⊟</div>
+        <div className="flex-1"><p className="text-sm font-medium text-[#1A1A18]">{s.name}</p><p className="text-xs text-[#9A9990] mt-0.5">{s.meta}</p></div>
+        <div className="flex items-center gap-2">
+          <StatusPill status={s.status}/>
+          <button
+            onClick={() => {
+              setEditingSession(s);
+              setSessionModalOpen(true);
+            }}
+            className="text-xs px-2.5 py-1 border border-[#D8D7D0] rounded-lg text-[#9A9990] hover:text-[#1A1A18]">✎ Edit
+          </button>
+        </div>
+      </div>
+    ))}
+  </SimplePanel>
+)}
         {panel === "stocks" && (
           <SimplePanel title="Film stocks" sub="All stocks used in your archive">
             {[
