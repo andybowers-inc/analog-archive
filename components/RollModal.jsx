@@ -2,8 +2,8 @@
 import { useState, useEffect } from "react";
 
 const STOCKS = ["CineStill 400D","Kodak Portra 400","Kentmere Pan 400","CineStill 50D","Kodak Gold 200","Portra 160 NC","Other"];
-const FORMATS = ["35mm","120","4x5"];
-const FORMAT_FRAMES = { "35mm": 36, "120": 10, "4x5": 1 };
+const FORMATS = ["35mm","120"];
+const FORMAT_FRAMES = { "35mm": 36, "120": 10 };
 const PROCESSES = ["C-41","B&W standard","E-6","ECN-2","Home dev"];
 const PUSHPULL = [
   { value:"none",  label:"Normal (no push/pull)" },
