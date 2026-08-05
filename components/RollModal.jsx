@@ -23,6 +23,7 @@ const STATUSES = [
 const EMPTY = {
   name:"", stock:"CineStill 400D", format:"35mm",
   camera:"", lens:"", iso:"", box:"",
+  frames: 36,
   pushpull:"none", process:"C-41",
   session:"— none —", status:"shot",
   location:"", notes:"",
@@ -74,10 +75,22 @@ export default function RollModal({ roll, onSave, onDelete, onClose }) {
             </div>
             <div>
               <label className={lbl}>Format</label>
-              <select className={inp} value={form.format} onChange={e=>set("format",e.target.value)}>
+              <select className={inp} value={form.format} onChange={e=>{
+                const fmt = e.target.value;
+                set("format", fmt);
+                set("frames", FORMAT_FRAMES[fmt] ?? 36);
+              }}>
                 {FORMATS.map(f=><option key={f}>{f}</option>)}
               </select>
             </div>
+          </div>
+          <div className="mb-3">
+            <label className={lbl}>Number of frames</label>
+            <input className={inp} type="number" min="1" max="220"
+              value={form.frames}
+              onChange={e=>set("frames", parseInt(e.target.value)||1)}
+              placeholder="e.g. 36 for 35mm, 10 for 120"/>
+            <p className="text-[11px] text-[#9A9990] mt-1">Auto-fills by format — override if needed (e.g. 10 for 120, 36 for 35mm)</p>
           </div>
 
           <Section title="Camera & Exposure" />
