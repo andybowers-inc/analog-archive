@@ -204,6 +204,7 @@ function RollDetail({ roll, onBack, onEdit, onFrameClick }) {
               ["Camera",     roll.camera],
               ["Lens",       roll.lens || "—"],
               ["Format",     roll.format],
+      { label:"Scans", value: developed.reduce((sum, r) => sum + (r.frames || 36), 0), detail:"Across all rolls" },
               ["ISO metered",roll.iso],
               ["Box speed",  roll.box || "—"],
               ["Dev process",roll.process],
