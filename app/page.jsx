@@ -287,6 +287,56 @@ function ScansPanel({ rolls, rollScans, onAssignScan, onRemoveScan }) {
     setAssigningId(null);
   };
 
+  const [dragOverSlot, setDragOverSlot] = useState(null);
+  const frameInputRef = useRef(null);
+  const pendingSlot = useRef(null);
+
+  const openFramePicker = (rollId, frame) => {
+    pendingSlot.current = { rollId, frame };
+    frameInputRef.current?.click();
+  };
+
+  const handleFrameFileInput = (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !pendingSlot.current) return;
+    const { rollId, frame } = pendingSlot.current;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      onAssignScan({
+        id: Date.now() + Math.random(),
+        name: file.name,
+        src: ev.target.result,
+        size: file.size,
+        color: !file.name.toLowerCase().includes("bw") && !file.name.toLowerCase().includes("b&w"),
+        rollId,
+        frame,
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+    pendingSlot.current = null;
+  };
+
+  const handleFrameDrop = (e, rollId, frame) => {
+    e.preventDefault();
+    setDragOverSlot(null);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      onAssignScan({
+        id: Date.now() + Math.random(),
+        name: file.name,
+        src: ev.target.result,
+        size: file.size,
+        color: !file.name.toLowerCase().includes("bw") && !file.name.toLowerCase().includes("b&w"),
+        rollId,
+        frame,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const visibleRolls = filterRoll === "all" ? developed : developed.filter(r => r.id === parseInt(filterRoll));
 
   return (
@@ -311,6 +361,7 @@ function ScansPanel({ rolls, rollScans, onAssignScan, onRemoveScan }) {
 
       <div className="p-6">
         <input ref={fileInputRef} type="file" multiple accept="image/*,.tif,.tiff" className="hidden" onChange={handleFileInput}/>
+        <input ref={frameInputRef} type="file" accept="image/*,.tif,.tiff" className="hidden" onChange={handleFrameFileInput}/>
 
         {/* Drop zone — compact when scans exist */}
         {unassigned.length === 0 && Object.keys(rollScans).length === 0 && (
@@ -415,21 +466,33 @@ function ScansPanel({ rolls, rollScans, onAssignScan, onRemoveScan }) {
                     {Array.from({ length: total }, (_, i) => {
                       const frame = i + 1;
                       const scan = assigned.find(s => s.frame === frame);
+                      const isOver = dragOverSlot?.rollId === roll.id && dragOverSlot?.frame === frame;
                       return (
                         <div key={frame}
-                          className={`aspect-square rounded-lg border overflow-hidden relative cursor-pointer transition-colors ${scan ? "border-[#C8C7C0] hover:border-[#1A1A18]" : "border-dashed border-[#D8D7D0] bg-[#FAFAF8] hover:bg-[#F3F2EF]"}`}
-                          onClick={() => scan && setLightboxScan(scan)}>
+                          className={`aspect-square rounded-lg border overflow-hidden relative cursor-pointer transition-colors group
+                            ${scan
+                              ? "border-[#C8C7C0] hover:border-[#1A1A18]"
+                              : isOver
+                              ? "border-[#1A1A18] bg-[#F0EFEB] border-solid"
+                              : "border-dashed border-[#D8D7D0] bg-[#FAFAF8] hover:bg-[#F0EFEB] hover:border-[#C8C7C0]"
+                            }`}
+                          onClick={() => scan ? setLightboxScan(scan) : openFramePicker(roll.id, frame)}
+                          onDragOver={e=>{e.preventDefault();setDragOverSlot({rollId:roll.id,frame});}}
+                          onDragLeave={()=>setDragOverSlot(null)}
+                          onDrop={e=>handleFrameDrop(e, roll.id, frame)}
+                        >
                           {scan ? (
                             <>
                               <img src={scan.src} alt={scan.name} className="w-full h-full object-cover"/>
                               <button
                                 onClick={e=>{e.stopPropagation();onRemoveScan(roll.id,frame);}}
-                                className="absolute top-0.5 right-0.5 opacity-0 hover:opacity-100 bg-black/60 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px] group-hover:opacity-100">✕</button>
+                                className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-black/60 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px] transition-opacity">✕</button>
                               <span className={`${scan.color?"tag-color":"tag-bw"} absolute bottom-0.5 left-0.5 text-[8px] px-1 py-px rounded font-medium`}>{scan.color?"C":"B&W"}</span>
                             </>
                           ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center">
+                            <div className="w-full h-full flex flex-col items-center justify-center gap-1">
                               <span className="text-[9px] text-[#C0BFB8]">{frame}</span>
+                              {isOver && <span className="text-[9px] text-[#9A9990]">Drop here</span>}
                             </div>
                           )}
                         </div>
