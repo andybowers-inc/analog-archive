@@ -243,11 +243,12 @@ function RollDetail({ roll, onBack, onEdit, onFrameClick }) {
   );
 }
 
-function ScansPanel({ rolls }) {
-  const [filter, setFilter] = useState("all");
-  const [uploadedScans, setUploadedScans] = useState([]);
+function ScansPanel({ rolls, rollScans, onAssignScan, onRemoveScan }) {
   const [dragging, setDragging] = useState(false);
+  const [unassigned, setUnassigned] = useState([]);
   const [lightboxScan, setLightboxScan] = useState(null);
+  const [assigningId, setAssigningId] = useState(null);
+  const [filterRoll, setFilterRoll] = useState("all");
   const fileInputRef = useRef(null);
 
   const developed = rolls.filter(r => r.status === "developed");
@@ -259,14 +260,14 @@ function ScansPanel({ rolls }) {
     accepted.forEach(file => {
       const reader = new FileReader();
       reader.onload = (e) => {
-        setUploadedScans(prev => [...prev, {
+        setUnassigned(prev => [...prev, {
           id: Date.now() + Math.random(),
           name: file.name,
           src: e.target.result,
           size: file.size,
-          type: file.type,
           color: !file.name.toLowerCase().includes("bw") && !file.name.toLowerCase().includes("b&w"),
-          roll: "",
+          rollId: null,
+          frame: null,
         }]);
       };
       reader.readAsDataURL(file);
@@ -274,151 +275,211 @@ function ScansPanel({ rolls }) {
   };
 
   const handleFileInput = (e) => { if (e.target.files?.length) processFiles(e.target.files); };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setDragging(false);
-    if (e.dataTransfer.files?.length) processFiles(e.dataTransfer.files);
-  };
-
+  const handleDrop = (e) => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files?.length) processFiles(e.dataTransfer.files); };
   const handleDragOver = (e) => { e.preventDefault(); setDragging(true); };
   const handleDragLeave = () => setDragging(false);
-  const removeUpload = (id) => setUploadedScans(prev => prev.filter(s => s.id !== id));
 
-  const allItems = [
-    ...uploadedScans.map(s => ({ type:"uploaded", scan:s, color:s.color })),
-    ...developed.flatMap(r =>
-      Array.from({ length: Math.min(r.frames, 6) }, (_, i) => ({
-        type:"placeholder", roll:r, frame:i+1, color:(i+1)%3!==0&&r.color
-      }))
-    )
-  ];
-  const filtered = filter==="all" ? allItems : allItems.filter(x => filter==="color" ? x.color : !x.color);
+  const assignScan = (scanId, rollId, frame) => {
+    const scan = unassigned.find(s => s.id === scanId);
+    if (!scan) return;
+    onAssignScan({ ...scan, rollId: parseInt(rollId), frame: parseInt(frame) });
+    setUnassigned(prev => prev.filter(s => s.id !== scanId));
+    setAssigningId(null);
+  };
+
+  const visibleRolls = filterRoll === "all" ? developed : developed.filter(r => r.id === parseInt(filterRoll));
 
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E4DF]">
         <div>
           <p className="text-[15px] font-medium text-[#1A1A18]">Scans</p>
-          <p className="text-xs text-[#9A9990] mt-0.5">Untouched negatives, organized by roll</p>
+          <p className="text-xs text-[#9A9990] mt-0.5">Upload and organize by roll</p>
         </div>
-        {uploadedScans.length > 0 && (
-          <span className="text-xs text-[#9A9990]">{uploadedScans.length} scan{uploadedScans.length!==1?"s":""} uploaded</span>
-        )}
-      </div>
-      <div className="p-6">
-
-        {/* Hidden file input */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept="image/*,.tif,.tiff"
-          className="hidden"
-          onChange={handleFileInput}
-        />
-
-        {/* Drop zone */}
-        <div
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          className={`border-2 border-dashed rounded-xl p-8 text-center mb-6 transition-colors cursor-pointer ${
-            dragging
-              ? "border-[#1A1A18] bg-[#F0EFEB]"
-              : "border-[#D8D7D0] hover:border-[#C8C7C0] hover:bg-[#FAFAF8]"
-          }`}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <p className="text-2xl text-[#9A9990] mb-2">{dragging ? "⬇" : "☁"}</p>
-          <p className="text-sm font-medium text-[#1A1A18] mb-1">
-            {dragging ? "Drop files to upload" : "Upload raw scans"}
-          </p>
-          <p className="text-xs text-[#9A9990] mb-3">
-            Drag and drop here, or click anywhere in this box to browse your files.
-          </p>
-          <button
-            onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
-            className="px-4 py-1.5 border border-[#D8D7D0] rounded-lg text-xs text-[#4A4A46] hover:bg-[#EEEEE8] transition-colors"
-          >
-            Browse files
+        <div className="flex items-center gap-3">
+          {unassigned.length > 0 && (
+            <span className="text-xs font-medium text-[#BA7517] bg-[#FAEEDA] px-2.5 py-1 rounded-full">
+              {unassigned.length} unassigned
+            </span>
+          )}
+          <button onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">
+            + Upload scans
           </button>
-          <p className="text-[10px] text-[#C0BFB8] mt-2">JPEG, PNG, TIF, TIFF accepted</p>
         </div>
+      </div>
 
-        {/* Uploaded scans — previews */}
-        {uploadedScans.length > 0 && (
-          <div className="mb-6">
+      <div className="p-6">
+        <input ref={fileInputRef} type="file" multiple accept="image/*,.tif,.tiff" className="hidden" onChange={handleFileInput}/>
+
+        {/* Drop zone — compact when scans exist */}
+        {unassigned.length === 0 && Object.keys(rollScans).length === 0 && (
+          <div
+            onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}
+            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-xl p-10 text-center mb-6 transition-colors cursor-pointer ${dragging ? "border-[#1A1A18] bg-[#F0EFEB]" : "border-[#D8D7D0] hover:border-[#C8C7C0] hover:bg-[#FAFAF8]"}`}
+          >
+            <p className="text-3xl text-[#9A9990] mb-2">{dragging ? "⬇" : "☁"}</p>
+            <p className="text-sm font-medium text-[#1A1A18] mb-1">{dragging ? "Drop to upload" : "Upload raw scans"}</p>
+            <p className="text-xs text-[#9A9990] mb-3">Drag and drop here, or click to browse</p>
+            <button onClick={e=>{e.stopPropagation();fileInputRef.current?.click();}}
+              className="px-4 py-1.5 border border-[#D8D7D0] rounded-lg text-xs text-[#4A4A46] hover:bg-[#EEEEE8]">Browse files</button>
+            <p className="text-[10px] text-[#C0BFB8] mt-2">JPEG, PNG, TIF, TIFF accepted</p>
+          </div>
+        )}
+
+        {/* Inline drop target when already have content */}
+        {(unassigned.length > 0 || Object.keys(rollScans).length > 0) && (
+          <div
+            onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}
+            onClick={() => fileInputRef.current?.click()}
+            className={`border border-dashed rounded-xl p-4 text-center mb-6 transition-colors cursor-pointer ${dragging ? "border-[#1A1A18] bg-[#F0EFEB]" : "border-[#D8D7D0] hover:border-[#C8C7C0]"}`}
+          >
+            <p className="text-xs text-[#9A9990]">{dragging ? "Drop files to upload" : "Drop more files here or click to browse"}</p>
+          </div>
+        )}
+
+        {/* Unassigned scans — assign to roll */}
+        {unassigned.length > 0 && (
+          <div className="mb-8">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-medium text-[#1A1A18]">Uploaded scans</p>
-              <button onClick={()=>setUploadedScans([])} className="text-xs text-[#9A9990] hover:text-red-600">Clear all</button>
+              <div>
+                <p className="text-sm font-medium text-[#1A1A18]">Unassigned scans</p>
+                <p className="text-xs text-[#9A9990] mt-0.5">Assign each scan to a roll and frame number</p>
+              </div>
+              <button onClick={()=>setUnassigned([])} className="text-xs text-[#9A9990] hover:text-red-600">Clear all</button>
             </div>
-            <div className="grid grid-cols-5 gap-2">
-              {uploadedScans.map(scan => (
-                <div key={scan.id} className="relative group aspect-square rounded-lg overflow-hidden border border-[#E5E4DF] cursor-pointer hover:border-[#C8C7C0]"
-                  onClick={() => setLightboxScan(scan)}>
-                  <img src={scan.src} alt={scan.name} className="w-full h-full object-cover"/>
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors"/>
-                  <button
-                    onClick={e=>{ e.stopPropagation(); removeUpload(scan.id); }}
-                    className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] transition-opacity"
-                  >✕</button>
-                  <span className={`${scan.color?"tag-color":"tag-bw"} absolute bottom-1 left-1 text-[8px] px-1 py-px rounded font-medium`}>
-                    {scan.color?"C":"B&W"}
-                  </span>
+            <div className="flex flex-col gap-3">
+              {unassigned.map(scan => (
+                <div key={scan.id} className="bg-white border border-[#E5E4DF] rounded-xl p-3 flex items-center gap-4 hover:border-[#C8C7C0]">
+                  {/* Thumb */}
+                  <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer border border-[#E5E4DF]"
+                    onClick={()=>setLightboxScan(scan)}>
+                    <img src={scan.src} alt={scan.name} className="w-full h-full object-cover"/>
+                  </div>
+                  {/* Filename */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-[#1A1A18] truncate">{scan.name}</p>
+                    <p className="text-xs text-[#9A9990] mt-0.5">{(scan.size/1024/1024).toFixed(2)} MB · {scan.color?"Color":"B&W"}</p>
+                  </div>
+                  {/* Assignment controls */}
+                  {assigningId === scan.id ? (
+                    <AssignForm scan={scan} rolls={developed} onAssign={assignScan} onCancel={()=>setAssigningId(null)}/>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button onClick={()=>setAssigningId(scan.id)}
+                        className="px-3 py-1.5 bg-[#1A1A18] text-white text-xs rounded-lg font-medium hover:bg-[#333]">
+                        Assign to roll
+                      </button>
+                      <button onClick={()=>setUnassigned(prev=>prev.filter(s=>s.id!==scan.id))}
+                        className="px-3 py-1.5 border border-[#D8D7D0] text-xs rounded-lg text-[#9A9990] hover:text-red-600 hover:border-red-200">
+                        Remove
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Roll placeholders */}
+        {/* Organized by roll */}
         {developed.length > 0 && (
-          <>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-medium text-[#1A1A18]">Developed rolls</p>
-              <div className="flex gap-1.5">
-                {["all","color","bw"].map(f => (
-                  <button key={f} onClick={()=>setFilter(f)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filter===f?"bg-[#1A1A18] text-white border-[#1A1A18]":"border-[#D8D7D0] text-[#4A4A46] hover:bg-[#F7F6F3]"}`}>
-                    {f==="all"?"All":f==="color"?"Color":"B&W"}
-                  </button>
-                ))}
-              </div>
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-medium text-[#1A1A18]">Organized by roll</p>
+              <select
+                className="text-xs border border-[#D8D7D0] rounded-lg px-2.5 py-1.5 bg-white text-[#4A4A46] focus:outline-none focus:border-[#1A1A18]"
+                value={filterRoll} onChange={e=>setFilterRoll(e.target.value)}>
+                <option value="all">All rolls</option>
+                {developed.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
             </div>
-            <div className="grid grid-cols-6 gap-2">
-              {developed.flatMap(r =>
-                Array.from({ length: Math.min(r.frames, 6) }, (_, i) => {
-                  const n = i+1;
-                  const color = n%3!==0&&r.color;
-                  if (filter!=="all" && (filter==="color"?!color:color)) return null;
-                  return (
-                    <div key={`${r.id}-${n}`} className="aspect-square bg-white border border-[#E5E4DF] rounded-lg flex items-center justify-center relative overflow-hidden cursor-pointer hover:border-[#C8C7C0]">
-                      <span className="text-[9px] text-[#9A9990]">{r.id}-0{n}</span>
-                      <span className={`${color?"tag-color":"tag-bw"} absolute bottom-1 left-1 text-[8px] px-1 py-px rounded font-medium`}>{color?"C":"B&W"}</span>
+
+            {visibleRolls.map(roll => {
+              const assigned = (rollScans[roll.id] || []);
+              const total = roll.frames || 36;
+              return (
+                <div key={roll.id} className="mb-6">
+                  {/* Roll header */}
+                  <div className="flex items-center justify-between mb-2 pb-2 border-b border-[#E5E4DF]">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{background: roll.color ? "#185FA5" : "#5F5E5A"}}/>
+                      <p className="text-sm font-medium text-[#1A1A18]">{roll.name}</p>
+                      <span className="text-xs text-[#9A9990]">· {roll.stock} · {roll.format}</span>
                     </div>
-                  );
-                }).filter(Boolean)
-              )}
-            </div>
-          </>
+                    <span className="text-xs text-[#9A9990]">{assigned.length}/{total} scans</span>
+                  </div>
+                  {/* Frame grid */}
+                  <div className="grid grid-cols-6 gap-2">
+                    {Array.from({ length: total }, (_, i) => {
+                      const frame = i + 1;
+                      const scan = assigned.find(s => s.frame === frame);
+                      return (
+                        <div key={frame}
+                          className={`aspect-square rounded-lg border overflow-hidden relative cursor-pointer transition-colors ${scan ? "border-[#C8C7C0] hover:border-[#1A1A18]" : "border-dashed border-[#D8D7D0] bg-[#FAFAF8] hover:bg-[#F3F2EF]"}`}
+                          onClick={() => scan && setLightboxScan(scan)}>
+                          {scan ? (
+                            <>
+                              <img src={scan.src} alt={scan.name} className="w-full h-full object-cover"/>
+                              <button
+                                onClick={e=>{e.stopPropagation();onRemoveScan(roll.id,frame);}}
+                                className="absolute top-0.5 right-0.5 opacity-0 hover:opacity-100 bg-black/60 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px] group-hover:opacity-100">✕</button>
+                              <span className={`${scan.color?"tag-color":"tag-bw"} absolute bottom-0.5 left-0.5 text-[8px] px-1 py-px rounded font-medium`}>{scan.color?"C":"B&W"}</span>
+                            </>
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center">
+                              <span className="text-[9px] text-[#C0BFB8]">{frame}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
 
-        {developed.length === 0 && uploadedScans.length === 0 && (
-          <p className="text-center text-sm text-[#9A9990] mt-4">No developed rolls yet — scans will appear here once rolls are marked as developed.</p>
+        {developed.length === 0 && (
+          <p className="text-center text-sm text-[#9A9990] mt-6">No developed rolls yet — mark a roll as developed to start organizing scans.</p>
         )}
       </div>
 
-      {/* Scan lightbox */}
+      {/* Lightbox */}
       {lightboxScan && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-6" onClick={()=>setLightboxScan(null)}>
-          <button className="absolute top-4 right-4 text-white/50 hover:text-white text-2xl">✕</button>
+          <button className="absolute top-4 right-4 text-white/50 hover:text-white text-2xl leading-none">✕</button>
           <div className="max-w-3xl max-h-full flex flex-col items-center gap-3" onClick={e=>e.stopPropagation()}>
-            <img src={lightboxScan.src} alt={lightboxScan.name} className="max-h-[75vh] max-w-full object-contain rounded-lg"/>
-            <p className="text-white/60 text-xs">{lightboxScan.name} · {(lightboxScan.size/1024/1024).toFixed(1)} MB</p>
+            <img src={lightboxScan.src} alt={lightboxScan.name} className="max-h-[78vh] max-w-full object-contain rounded-lg"/>
+            <p className="text-white/50 text-xs">{lightboxScan.name}{lightboxScan.size ? ` · ${(lightboxScan.size/1024/1024).toFixed(1)} MB` : ""}</p>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function AssignForm({ scan, rolls, onAssign, onCancel }) {
+  const [rollId, setRollId] = useState(rolls[0]?.id || "");
+  const [frame, setFrame] = useState(1);
+  const selectedRoll = rolls.find(r => r.id === parseInt(rollId));
+
+  return (
+    <div className="flex items-center gap-2 flex-shrink-0">
+      <select value={rollId} onChange={e=>setRollId(e.target.value)}
+        className="text-xs border border-[#D8D7D0] rounded-lg px-2 py-1.5 bg-white text-[#1A1A18] focus:outline-none focus:border-[#1A1A18] max-w-[140px]">
+        {rolls.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
+      </select>
+      <input type="number" min="1" max={selectedRoll?.frames||36} value={frame}
+        onChange={e=>setFrame(e.target.value)}
+        className="text-xs border border-[#D8D7D0] rounded-lg px-2 py-1.5 w-16 bg-white text-[#1A1A18] focus:outline-none focus:border-[#1A1A18]"
+        placeholder="Frame"/>
+      <button onClick={()=>onAssign(scan.id, rollId, frame)}
+        className="px-3 py-1.5 bg-[#1A1A18] text-white text-xs rounded-lg font-medium hover:bg-[#333]">Save</button>
+      <button onClick={onCancel}
+        className="px-3 py-1.5 border border-[#D8D7D0] text-xs rounded-lg text-[#9A9990] hover:bg-[#F7F6F3]">Cancel</button>
     </div>
   );
 }
@@ -496,6 +557,7 @@ function SessionModal({ session, onSave, onDelete, onClose }) {
 export default function App() {
   const [rolls, setRolls] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [rollScans, setRollScans] = useState({});
   const [panel, setPanel] = useState("dashboard");
   const [rollFilter, setRollFilter] = useState("all");
   const [detailId, setDetailId] = useState(null);
@@ -560,6 +622,21 @@ export default function App() {
     showToast("Session deleted");
   };
 
+  const handleAssignScan = (scan) => {
+    setRollScans(prev => {
+      const existing = prev[scan.rollId] || [];
+      const filtered = existing.filter(s => s.frame !== scan.frame);
+      return { ...prev, [scan.rollId]: [...filtered, scan] };
+    });
+  };
+
+  const handleRemoveScan = (rollId, frame) => {
+    setRollScans(prev => ({
+      ...prev,
+      [rollId]: (prev[rollId] || []).filter(s => s.frame !== frame)
+    }));
+  };
+
   const openDetail = (id) => { setDetailId(id); setPanel("detail"); };
   const editingRoll = typeof rollModal === "number" ? rolls.find(r => r.id === rollModal) : null;
 
@@ -596,7 +673,7 @@ export default function App() {
             onFrameClick={frame=>setLightbox({rollId:detailId,frame})}
           />
         )}
-        {panel === "scans" && <ScansPanel rolls={rolls}/>}
+        {panel === "scans" && <ScansPanel rolls={rolls} rollScans={rollScans} onAssignScan={handleAssignScan} onRemoveScan={handleRemoveScan}/>}
 
         {panel === "sessions" && (
           <div className="flex-1 overflow-y-auto">
