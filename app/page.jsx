@@ -617,6 +617,222 @@ function SessionModal({ session, onSave, onDelete, onClose }) {
   );
 }
 
+// Built-in specs for known stocks — editable per-user overrides stored in localStorage
+const DEFAULT_SPECS = {
+  "CineStill 400D":   { process:"C-41", type:"Color negative", balance:"Daylight", iso:"400", grain:"Fine", notes:"Remjet-removed cinema stock. Halation at bright edges. Excellent skin tones in natural light." },
+  "Kentmere Pan 400": { process:"B&W",  type:"Black & white",  balance:"Panchromatic", iso:"400", grain:"Medium", notes:"Budget B&W with strong contrast. Pushes well to 800 or 1600." },
+  "Kodak Portra 400": { process:"C-41", type:"Color negative", balance:"Daylight", iso:"400", grain:"Fine", notes:"Industry standard portrait stock. Wide latitude, accurate skin tones." },
+  "Kodak Gold 200":   { process:"C-41", type:"Color negative", balance:"Daylight", iso:"200", grain:"Medium", notes:"Warm, saturated budget stock. Best in bright natural light." },
+  "CineStill 50D":    { process:"C-41", type:"Color negative", balance:"Daylight", iso:"50",  grain:"Very fine", notes:"Ultra-fine grain cinema stock. Best for controlled or bright environments." },
+  "Portra 160 NC":    { process:"C-41", type:"Color negative", balance:"Daylight", iso:"160", grain:"Very fine", notes:"Discontinued Natural Color stock. Low contrast, neutral palette. Expired stock metered at ISO 40." },
+};
+
+function loadStockOverrides() {
+  if (typeof window === "undefined") return {};
+  try { return JSON.parse(localStorage.getItem("analog-archive-stock-specs-v1") || "{}"); } catch { return {}; }
+}
+function saveStockOverrides(data) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("analog-archive-stock-specs-v1", JSON.stringify(data));
+}
+
+function StocksPanel({ rolls }) {
+  const [overrides, setOverrides] = useState({});
+  const [editing, setEditing] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+
+  useEffect(() => { setOverrides(loadStockOverrides()); }, []);
+
+  // Derive stocks dynamically from actual rolls
+  const stockMap = {};
+  rolls.forEach(r => {
+    if (!stockMap[r.stock]) stockMap[r.stock] = { name: r.stock, rolls: [], formats: new Set(), cameras: new Set() };
+    stockMap[r.stock].rolls.push(r);
+    stockMap[r.stock].formats.add(r.format);
+    stockMap[r.stock].cameras.add(r.camera);
+  });
+  const stocks = Object.values(stockMap).sort((a,b) => b.rolls.length - a.rolls.length);
+
+  const getSpecs = (name) => ({ ...DEFAULT_SPECS[name], ...overrides[name] });
+
+  const saveEdit = (name, form) => {
+    const next = { ...overrides, [name]: form };
+    setOverrides(next);
+    saveStockOverrides(next);
+    setEditing(null);
+  };
+
+  const PROCESS_COLORS = {
+    "C-41": { bg:"#E6F1FB", text:"#185FA5" },
+    "B&W":  { bg:"#F1EFE8", text:"#5F5E5A" },
+    "E-6":  { bg:"#EAF3DE", text:"#3B6D11" },
+  };
+
+  const inp = "w-full px-2.5 py-1.5 border border-[#D8D7D0] rounded-lg text-sm bg-[#F7F6F3] text-[#1A1A18] focus:outline-none focus:border-[#1A1A18]";
+  const lbl = "block text-xs font-medium text-[#4A4A46] mb-1";
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E4DF]">
+        <div>
+          <p className="text-[15px] font-medium text-[#1A1A18]">Film stocks</p>
+          <p className="text-xs text-[#9A9990] mt-0.5">{stocks.length} stock{stocks.length!==1?"s":""} used across your archive</p>
+        </div>
+      </div>
+
+      <div className="p-6 flex flex-col gap-3">
+        {stocks.length === 0 && (
+          <p className="text-sm text-[#9A9990] text-center mt-6">No rolls added yet — add your first roll to see stocks here.</p>
+        )}
+
+        {stocks.map(stock => {
+          const specs = getSpecs(stock.name);
+          const isExpanded = expanded === stock.name;
+          const pc = PROCESS_COLORS[specs.process] || { bg:"#F1EFE8", text:"#5F5E5A" };
+          const developedCount = stock.rolls.filter(r=>r.status==="developed").length;
+          const labCount = stock.rolls.filter(r=>r.status==="lab").length;
+          const shotCount = stock.rolls.filter(r=>r.status==="shot").length;
+
+          return (
+            <div key={stock.name} className="bg-white border border-[#E5E4DF] rounded-xl overflow-hidden hover:border-[#C8C7C0] transition-colors">
+              {/* Main row */}
+              <div className="px-4 py-3.5 flex items-center gap-4 cursor-pointer" onClick={()=>setExpanded(isExpanded?null:stock.name)}>
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-semibold flex-shrink-0"
+                  style={{background:pc.bg, color:pc.text}}>
+                  {specs.process||"?"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-[#1A1A18]">{stock.name}</p>
+                  <p className="text-xs text-[#9A9990] mt-0.5">
+                    ISO {specs.iso||"—"} · {specs.type||"—"} · {specs.balance||"—"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  {/* Roll count badges */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium text-[#1A1A18]">{stock.rolls.length}</span>
+                    <span className="text-xs text-[#9A9990]">roll{stock.rolls.length!==1?"s":""}</span>
+                  </div>
+                  {developedCount>0 && <span className="pill-developed text-[10px] font-medium px-2 py-0.5 rounded-full">{developedCount} dev</span>}
+                  {labCount>0 && <span className="pill-lab text-[10px] font-medium px-2 py-0.5 rounded-full">{labCount} lab</span>}
+                  {shotCount>0 && <span className="pill-shot text-[10px] font-medium px-2 py-0.5 rounded-full">{shotCount} shot</span>}
+                  <span className="text-[#C8C7C0] text-xs">{isExpanded?"▲":"▼"}</span>
+                </div>
+              </div>
+
+              {/* Expanded detail */}
+              {isExpanded && (
+                <div className="border-t border-[#E5E4DF] bg-[#FAFAF8]">
+                  {/* Specs grid */}
+                  <div className="px-5 py-4 grid grid-cols-4 gap-4 border-b border-[#E5E4DF]">
+                    {[
+                      ["Process",  specs.process||"—"],
+                      ["ISO",      specs.iso||"—"],
+                      ["Type",     specs.type||"—"],
+                      ["Balance",  specs.balance||"—"],
+                      ["Grain",    specs.grain||"—"],
+                      ["Formats",  [...stock.formats].join(", ")||"—"],
+                      ["Cameras",  [...stock.cameras].join(", ")||"—"],
+                      ["Total rolls", stock.rolls.length],
+                    ].map(([label,value])=>(
+                      <div key={label}>
+                        <p className="text-[10px] font-medium text-[#9A9990] uppercase tracking-wide mb-0.5">{label}</p>
+                        <p className="text-sm text-[#1A1A18] font-medium">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Notes */}
+                  {specs.notes && (
+                    <div className="px-5 py-3 border-b border-[#E5E4DF]">
+                      <p className="text-[10px] font-medium text-[#9A9990] uppercase tracking-wide mb-1">Notes</p>
+                      <p className="text-sm text-[#4A4A46] leading-relaxed">{specs.notes}</p>
+                    </div>
+                  )}
+
+                  {/* Roll list */}
+                  <div className="px-5 py-3 border-b border-[#E5E4DF]">
+                    <p className="text-[10px] font-medium text-[#9A9990] uppercase tracking-wide mb-2">Rolls using this stock</p>
+                    <div className="flex flex-col gap-1.5">
+                      {stock.rolls.map(r=>(
+                        <div key={r.id} className="flex items-center gap-3 text-xs">
+                          <span className="text-[#1A1A18] font-medium flex-1">{r.name}</span>
+                          <span className="text-[#9A9990]">{r.format} · {r.date}</span>
+                          <span className={`${PILL_MAP[r.status]} text-[10px] font-medium px-2 py-0.5 rounded-full`}>{STATUS_LABELS[r.status]}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Edit button */}
+                  <div className="px-5 py-3 flex justify-end">
+                    <button onClick={()=>setEditing({name:stock.name, ...specs})}
+                      className="text-xs px-3 py-1.5 border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-white hover:border-[#C8C7C0]">
+                      ✎ Edit specs
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Edit modal */}
+      {editing && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-[#E5E4DF] rounded-xl w-full max-w-sm flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E4DF]">
+              <div>
+                <h2 className="text-sm font-medium text-[#1A1A18]">Edit stock specs</h2>
+                <p className="text-xs text-[#9A9990] mt-0.5">{editing.name}</p>
+              </div>
+              <button onClick={()=>setEditing(null)} className="text-[#9A9990] hover:text-[#1A1A18] text-lg leading-none">✕</button>
+            </div>
+            <div className="px-5 py-4 overflow-y-auto flex-1">
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div><label className={lbl}>ISO</label>
+                  <input className={inp} value={editing.iso||""} onChange={e=>setEditing(f=>({...f,iso:e.target.value}))} placeholder="e.g. 400"/></div>
+                <div><label className={lbl}>Process</label>
+                  <select className={inp} value={editing.process||""} onChange={e=>setEditing(f=>({...f,process:e.target.value}))}>
+                    <option>C-41</option><option>B&W</option><option>E-6</option><option>ECN-2</option><option>Home dev</option>
+                  </select></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div><label className={lbl}>Type</label>
+                  <select className={inp} value={editing.type||""} onChange={e=>setEditing(f=>({...f,type:e.target.value}))}>
+                    <option>Color negative</option><option>Black & white</option><option>Color reversal</option>
+                  </select></div>
+                <div><label className={lbl}>Balance</label>
+                  <select className={inp} value={editing.balance||""} onChange={e=>setEditing(f=>({...f,balance:e.target.value}))}>
+                    <option>Daylight</option><option>Tungsten</option><option>Panchromatic</option>
+                  </select></div>
+              </div>
+              <div className="mb-3">
+                <label className={lbl}>Grain</label>
+                <select className={inp} value={editing.grain||""} onChange={e=>setEditing(f=>({...f,grain:e.target.value}))}>
+                  <option>Very fine</option><option>Fine</option><option>Medium</option><option>Coarse</option>
+                </select>
+              </div>
+              <div>
+                <label className={lbl}>Notes</label>
+                <textarea className={inp} rows={3} style={{resize:"none"}} value={editing.notes||""}
+                  onChange={e=>setEditing(f=>({...f,notes:e.target.value}))}
+                  placeholder="Characteristics, tips, metering notes..."/>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-[#E5E4DF]">
+              <button onClick={()=>setEditing(null)} className="text-sm px-4 py-1.5 border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">Cancel</button>
+              <button onClick={()=>saveEdit(editing.name, {iso:editing.iso,process:editing.process,type:editing.type,balance:editing.balance,grain:editing.grain,notes:editing.notes})}
+                className="text-sm px-4 py-1.5 bg-[#1A1A18] text-white rounded-lg font-medium hover:bg-[#333]">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [rolls, setRolls] = useState([]);
   const [sessions, setSessions] = useState([]);
@@ -805,21 +1021,7 @@ export default function App() {
         )}
 
         {panel === "stocks" && (
-          <SimplePanel title="Film stocks" sub="All stocks used in your archive">
-            {[
-              { process:"C41", name:"CineStill 400D", meta:"ISO 400 · Color negative · Daylight", count:"3 rolls" },
-              { process:"C41", name:"Kodak Portra 400", meta:"ISO 400 · Color negative · Daylight", count:"2 rolls" },
-              { process:"B&W", name:"Kentmere Pan 400", meta:"ISO 400 · Black & white · Panchromatic", count:"1 roll" },
-              { process:"C41", name:"Kodak Gold 200", meta:"ISO 200 · Color negative · Daylight", count:"1 roll" },
-              { process:"C41", name:"Portra 160 NC (expired)", meta:"ISO 40 metered · Color negative · 2004", count:"0 rolls yet" },
-            ].map(s => (
-              <div key={s.name} className="bg-white border border-[#E5E4DF] rounded-xl px-4 py-3 flex items-center gap-4 mb-2 hover:border-[#C8C7C0]">
-                <div className="w-9 h-9 rounded-lg bg-[#F7F6F3] flex items-center justify-center text-[10px] font-medium text-[#9A9990]">{s.process}</div>
-                <div className="flex-1"><p className="text-sm font-medium text-[#1A1A18]">{s.name}</p><p className="text-xs text-[#9A9990] mt-0.5">{s.meta}</p></div>
-                <div className="flex items-center gap-2"><span className="text-xs text-[#9A9990]">{s.count}</span></div>
-              </div>
-            ))}
-          </SimplePanel>
+          <StocksPanel rolls={rolls} />
         )}
 
         {panel === "export" && (
