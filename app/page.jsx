@@ -619,22 +619,60 @@ function SessionModal({ session, onSave, onDelete, onClose }) {
 
 // ─── Export Panel ───────────────────────────────────────────────────────────
 function ExportPanel({ rolls, rollScans }) {
-  const [selectedRoll, setSelectedRoll] = useState("all");
+  const [selectedScans, setSelectedScans] = useState({}); // { rollId: Set of frames }
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewName, setPreviewName] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [expandedRoll, setExpandedRoll] = useState(null);
 
-  const developed = rolls.filter(r => r.status === "developed");
+  const developed = rolls.filter(r => r.status === "developed" && (rollScans[r.id]||[]).length > 0);
 
-  const getScansForRoll = (roll) => (rollScans[roll.id] || []).sort((a,b) => a.frame - b.frame);
+  // Toggle a single scan frame
+  const toggleScan = (rollId, frame) => {
+    setSelectedScans(prev => {
+      const current = new Set(prev[rollId] || []);
+      if (current.has(frame)) current.delete(frame);
+      else current.add(frame);
+      return { ...prev, [rollId]: current };
+    });
+  };
 
-  const getRollsToExport = () =>
-    selectedRoll === "all"
-      ? developed.filter(r => (rollScans[r.id]||[]).length > 0)
-      : developed.filter(r => r.id === parseInt(selectedRoll));
+  // Toggle all scans for a roll
+  const toggleRoll = (rollId) => {
+    const scans = rollScans[rollId] || [];
+    const current = selectedScans[rollId] || new Set();
+    const allSelected = scans.every(s => current.has(s.frame));
+    setSelectedScans(prev => ({
+      ...prev,
+      [rollId]: allSelected ? new Set() : new Set(scans.map(s => s.frame))
+    }));
+  };
 
-  // Build a contact sheet on canvas matching the reference style
-  const buildContactSheet = (roll, scans) => new Promise((resolve) => {
+  const selectAll = () => {
+    const next = {};
+    developed.forEach(r => {
+      next[r.id] = new Set((rollScans[r.id]||[]).map(s=>s.frame));
+    });
+    setSelectedScans(next);
+  };
+
+  const clearAll = () => setSelectedScans({});
+
+  // Collect all selected scan objects in order
+  const getSelectedScanObjects = () => {
+    const out = [];
+    developed.forEach(r => {
+      const frames = selectedScans[r.id] || new Set();
+      const scans = (rollScans[r.id]||[]).filter(s=>frames.has(s.frame)).sort((a,b)=>a.frame-b.frame);
+      scans.forEach(s => out.push({ ...s, rollName: r.name, rollStock: r.stock, rollFormat: r.format, rollDate: r.date, rollId: r.id }));
+    });
+    return out;
+  };
+
+  const totalSelected = Object.values(selectedScans).reduce((n, set) => n + set.size, 0);
+
+  // Build contact sheet canvas
+  const buildContactSheet = (scans, title) => new Promise((resolve) => {
     const COLS = 3;
     const ROWS = Math.ceil(scans.length / COLS);
     const CELL_W = 900;
@@ -647,31 +685,24 @@ function ExportPanel({ rolls, rollScans }) {
     const H = HEADER_H + ROWS * (CELL_H + LABEL_H + PAD) + PAD + FOOTER_H;
 
     const canvas = document.createElement("canvas");
-    canvas.width = W;
-    canvas.height = H;
+    canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");
 
-    // White background
     ctx.fillStyle = "#FFFFFF";
     ctx.fillRect(0, 0, W, H);
 
-    // Header
     ctx.fillStyle = "#1A1A18";
-    ctx.font = "bold 52px 'Arial', sans-serif";
-    ctx.fillText(roll.name, PAD, 70);
+    ctx.font = "bold 52px Arial, sans-serif";
+    ctx.fillText(title, PAD, 70);
     ctx.fillStyle = "#9A9990";
-    ctx.font = "36px 'Arial', sans-serif";
-    ctx.fillText(`${roll.stock} · ${roll.format} · ${roll.date} · ${scans.length} frames`, PAD, 110);
+    ctx.font = "36px Arial, sans-serif";
+    ctx.fillText(`${scans.length} frame${scans.length!==1?"s":""} selected`, PAD, 110);
 
-    // Thin rule under header
     ctx.strokeStyle = "#E5E4DF";
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(PAD, HEADER_H - 10);
-    ctx.lineTo(W - PAD, HEADER_H - 10);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PAD, HEADER_H-10); ctx.lineTo(W-PAD, HEADER_H-10); ctx.stroke();
 
-    const loadImage = (src) => new Promise((res, rej) => {
+    const loadImage = (src) => new Promise((res) => {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => res(img);
@@ -686,196 +717,176 @@ function ExportPanel({ rolls, rollScans }) {
         const x = PAD + col * (CELL_W + PAD);
         const y = HEADER_H + row * (CELL_H + LABEL_H + PAD);
 
-        // Frame border
-        ctx.strokeStyle = "#E5E4DF";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#E5E4DF"; ctx.lineWidth = 2;
         ctx.strokeRect(x, y, CELL_W, CELL_H);
 
         const img = images[i];
         if (img) {
-          // Cover-fit image into cell
           const scale = Math.max(CELL_W / img.width, CELL_H / img.height);
-          const dw = img.width * scale;
-          const dh = img.height * scale;
-          const dx = x + (CELL_W - dw) / 2;
-          const dy = y + (CELL_H - dh) / 2;
+          const dw = img.width * scale, dh = img.height * scale;
+          const dx = x + (CELL_W - dw) / 2, dy = y + (CELL_H - dh) / 2;
           ctx.save();
-          ctx.beginPath();
-          ctx.rect(x, y, CELL_W, CELL_H);
-          ctx.clip();
+          ctx.beginPath(); ctx.rect(x, y, CELL_W, CELL_H); ctx.clip();
           ctx.drawImage(img, dx, dy, dw, dh);
           ctx.restore();
         } else {
-          ctx.fillStyle = "#F7F6F3";
-          ctx.fillRect(x, y, CELL_W, CELL_H);
-          ctx.fillStyle = "#C0BFB8";
-          ctx.font = "32px Arial";
-          ctx.textAlign = "center";
+          ctx.fillStyle = "#F7F6F3"; ctx.fillRect(x, y, CELL_W, CELL_H);
+          ctx.fillStyle = "#C0BFB8"; ctx.font = "32px Arial"; ctx.textAlign = "center";
           ctx.fillText(`Frame ${scan.frame}`, x + CELL_W/2, y + CELL_H/2);
           ctx.textAlign = "left";
         }
 
-        // Label below frame
         const label = scan.name.replace(/\.[^/.]+$/, "").slice(0, 40);
-        ctx.fillStyle = "#5F5E5A";
-        ctx.font = "28px 'Arial', sans-serif";
+        ctx.fillStyle = "#5F5E5A"; ctx.font = "28px Arial, sans-serif";
         ctx.fillText(label, x, y + CELL_H + 36);
       });
 
-      // Footer
       const now = new Date();
-      const dateStr = `${now.toLocaleDateString("en-US", {year:"numeric",month:"long",day:"numeric"})}`;
-      ctx.fillStyle = "#C0BFB8";
-      ctx.font = "28px Arial";
-      ctx.textAlign = "right";
-      ctx.fillText(`Analog Archive · ${dateStr}`, W - PAD, H - 28);
+      ctx.fillStyle = "#C0BFB8"; ctx.font = "28px Arial"; ctx.textAlign = "right";
+      ctx.fillText(`Analog Archive · ${now.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}`, W-PAD, H-28);
       ctx.textAlign = "left";
-
       resolve(canvas);
     });
   });
 
-  const handleContactSheet = async (forSocial = false) => {
-    const exportRolls = getRollsToExport();
-    if (!exportRolls.length) { alert("No scans found for the selected roll."); return; }
+  const handleContactSheet = async () => {
+    const scans = getSelectedScanObjects();
+    if (!scans.length) return;
     setGenerating(true);
-    const roll = exportRolls[0];
-    const scans = getScansForRoll(roll);
-    if (!scans.length) { setGenerating(false); alert("No scans uploaded for this roll yet."); return; }
-
-    const canvas = await buildContactSheet(roll, scans);
-
-    if (forSocial) {
-      // 1:1 crop for social
-      const size = Math.min(canvas.width, canvas.height);
-      const sq = document.createElement("canvas");
-      sq.width = size; sq.height = size;
-      sq.getContext("2d").drawImage(canvas, 0, 0);
-      const url = sq.toDataURL("image/jpeg", 0.92);
-      setPreviewUrl(url);
-      setPreviewName(`${roll.name.replace(/\s+/g,"-")}_contact-social.jpg`);
-    } else {
-      const url = canvas.toDataURL("image/jpeg", 0.95);
-      setPreviewUrl(url);
-      setPreviewName(`${roll.name.replace(/\s+/g,"-")}_contact-sheet.jpg`);
-    }
+    const title = totalSelected === 1 ? scans[0].rollName : "Selected frames";
+    const canvas = await buildContactSheet(scans, title);
+    setPreviewUrl(canvas.toDataURL("image/jpeg", 0.95));
+    setPreviewName(`analog-archive_contact-sheet.jpg`);
     setGenerating(false);
   };
 
-  const handleZipDownload = async () => {
-    const exportRolls = getRollsToExport();
-    if (!exportRolls.length) { alert("No scans found for the selected roll."); return; }
-    setGenerating(true);
-
-    // Build zip using native browser — create a folder of data URLs as individual downloads
-    // (Full JSZip would need npm install — for now download each scan individually)
-    const roll = exportRolls[0];
-    const scans = getScansForRoll(roll);
-    if (!scans.length) { setGenerating(false); alert("No scans uploaded for this roll yet."); return; }
-
+  const handleDownloadScans = () => {
+    const scans = getSelectedScanObjects();
+    if (!scans.length) return;
     scans.forEach((scan, i) => {
       setTimeout(() => {
         const a = document.createElement("a");
         a.href = scan.src;
-        a.download = scan.name || `${roll.name}-frame-${scan.frame}.jpg`;
+        a.download = scan.name || `frame-${scan.frame}.jpg`;
         a.click();
       }, i * 300);
     });
-    setGenerating(false);
   };
 
   const downloadPreview = () => {
     const a = document.createElement("a");
-    a.href = previewUrl;
-    a.download = previewName;
-    a.click();
+    a.href = previewUrl; a.download = previewName; a.click();
   };
-
-  const exportRolls = getRollsToExport();
-  const selectedRollObj = developed.find(r => r.id === parseInt(selectedRoll));
-  const scansAvailable = selectedRoll === "all"
-    ? developed.reduce((n, r) => n + (rollScans[r.id]||[]).length, 0)
-    : (rollScans[parseInt(selectedRoll)]||[]).length;
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-6 py-4 border-b border-[#E5E4DF]">
-        <p className="text-[15px] font-medium text-[#1A1A18]">Export</p>
-        <p className="text-xs text-[#9A9990] mt-0.5">Download contact sheets and scan files</p>
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E4DF]">
+        <div>
+          <p className="text-[15px] font-medium text-[#1A1A18]">Export</p>
+          <p className="text-xs text-[#9A9990] mt-0.5">Select scans across rolls to export</p>
+        </div>
+        {totalSelected > 0 && (
+          <span className="text-xs font-medium text-[#185FA5] bg-[#E6F1FB] px-2.5 py-1 rounded-full">
+            {totalSelected} scan{totalSelected!==1?"s":""} selected
+          </span>
+        )}
       </div>
-      <div className="p-6 max-w-2xl">
 
-        {/* Roll selector */}
-        <div className="bg-white border border-[#E5E4DF] rounded-xl p-4 mb-4">
-          <p className="text-xs font-medium text-[#9A9990] uppercase tracking-wide mb-2">Select roll to export</p>
-          <select
-            className="w-full px-3 py-2 border border-[#D8D7D0] rounded-lg text-sm bg-[#F7F6F3] text-[#1A1A18] focus:outline-none focus:border-[#1A1A18]"
-            value={selectedRoll} onChange={e=>setSelectedRoll(e.target.value)}>
-            <option value="all">All developed rolls</option>
-            {developed.map(r=>(
-              <option key={r.id} value={r.id}>
-                {r.name} ({(rollScans[r.id]||[]).length} scans)
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-[#9A9990] mt-2">
-            {scansAvailable > 0
-              ? `${scansAvailable} scan${scansAvailable!==1?"s":""} available for export`
-              : "No scans uploaded for this roll yet — go to Scans to upload"}
-          </p>
+      <div className="p-6 flex gap-6">
+
+        {/* Left — scan selector */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-[#1A1A18]">Select scans</p>
+            <div className="flex gap-2">
+              <button onClick={selectAll} className="text-xs text-[#4A4A46] hover:text-[#1A1A18] px-2.5 py-1 border border-[#D8D7D0] rounded-lg hover:bg-[#F7F6F3]">Select all</button>
+              <button onClick={clearAll} className="text-xs text-[#9A9990] hover:text-[#1A1A18] px-2.5 py-1 border border-[#D8D7D0] rounded-lg hover:bg-[#F7F6F3]">Clear</button>
+            </div>
+          </div>
+
+          {developed.length === 0 && (
+            <div className="bg-white border border-dashed border-[#D8D7D0] rounded-xl p-8 text-center">
+              <p className="text-sm text-[#9A9990]">No developed rolls with scans yet.</p>
+              <p className="text-xs text-[#C0BFB8] mt-1">Upload scans in the Scans tab first.</p>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-3">
+            {developed.map(roll => {
+              const scans = (rollScans[roll.id]||[]).sort((a,b)=>a.frame-b.frame);
+              const rollSelected = selectedScans[roll.id] || new Set();
+              const allSelected = scans.every(s=>rollSelected.has(s.frame));
+              const someSelected = scans.some(s=>rollSelected.has(s.frame));
+              const isOpen = expandedRoll === roll.id;
+
+              return (
+                <div key={roll.id} className="bg-white border border-[#E5E4DF] rounded-xl overflow-hidden">
+                  {/* Roll header */}
+                  <div className="px-4 py-3 flex items-center gap-3">
+                    <input type="checkbox" checked={allSelected} ref={el => { if(el) el.indeterminate = someSelected && !allSelected; }}
+                      onChange={()=>toggleRoll(roll.id)}
+                      className="w-4 h-4 rounded accent-[#1A1A18] cursor-pointer flex-shrink-0"/>
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={()=>setExpandedRoll(isOpen?null:roll.id)}>
+                      <p className="text-sm font-medium text-[#1A1A18] truncate">{roll.name}</p>
+                      <p className="text-xs text-[#9A9990] mt-0.5">{roll.stock} · {roll.format} · {scans.length} scan{scans.length!==1?"s":""}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {someSelected && <span className="text-[10px] font-medium text-[#185FA5] bg-[#E6F1FB] px-2 py-0.5 rounded-full">{rollSelected.size} selected</span>}
+                      <button onClick={()=>setExpandedRoll(isOpen?null:roll.id)} className="text-[#C8C7C0] text-xs">{isOpen?"▲":"▼"}</button>
+                    </div>
+                  </div>
+
+                  {/* Scan grid */}
+                  {isOpen && (
+                    <div className="border-t border-[#E5E4DF] p-3 bg-[#FAFAF8]">
+                      <div className="grid grid-cols-5 gap-2">
+                        {scans.map(scan => {
+                          const checked = rollSelected.has(scan.frame);
+                          return (
+                            <div key={scan.frame}
+                              onClick={()=>toggleScan(roll.id, scan.frame)}
+                              className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-colors ${checked?"border-[#1A1A18]":"border-transparent hover:border-[#C8C7C0]"}`}>
+                              <img src={scan.src} alt={scan.name} className="w-full h-full object-cover"/>
+                              <div className={`absolute inset-0 transition-colors ${checked?"bg-[#1A1A18]/15":"bg-transparent"}`}/>
+                              {checked && (
+                                <div className="absolute top-1 right-1 w-4 h-4 bg-[#1A1A18] rounded-full flex items-center justify-center">
+                                  <span className="text-white text-[9px]">✓</span>
+                                </div>
+                              )}
+                              <span className="absolute bottom-0.5 right-1 text-[8px] text-white drop-shadow">{scan.frame}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Export options */}
-        <div className="flex flex-col gap-3">
-
-          {/* Contact sheet */}
-          <div className="bg-white border border-[#E5E4DF] rounded-xl p-4 hover:border-[#C8C7C0] transition-colors">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-[#1A1A18] mb-0.5">Contact sheet</p>
-                <p className="text-xs text-[#9A9990]">3-column grid with filename labels. White background, archival style. Downloads as JPEG.</p>
-              </div>
-              <button
-                onClick={()=>handleContactSheet(false)}
-                disabled={generating || scansAvailable===0}
-                className="flex-shrink-0 px-4 py-1.5 bg-[#1A1A18] text-white text-xs rounded-lg font-medium hover:bg-[#333] disabled:opacity-40 disabled:cursor-not-allowed">
-                {generating ? "Building…" : "Generate"}
+        {/* Right — export actions */}
+        <div className="w-56 flex-shrink-0">
+          <p className="text-sm font-medium text-[#1A1A18] mb-3">Export as</p>
+          <div className="flex flex-col gap-3">
+            <div className="bg-white border border-[#E5E4DF] rounded-xl p-4">
+              <p className="text-sm font-medium text-[#1A1A18] mb-1">Contact sheet</p>
+              <p className="text-xs text-[#9A9990] mb-3">3-column grid, archival style. Preview before download.</p>
+              <button onClick={handleContactSheet} disabled={generating||totalSelected===0}
+                className="w-full py-1.5 bg-[#1A1A18] text-white text-xs rounded-lg font-medium hover:bg-[#333] disabled:opacity-40 disabled:cursor-not-allowed">
+                {generating?"Building…":"Generate"}
+              </button>
+            </div>
+            <div className="bg-white border border-[#E5E4DF] rounded-xl p-4">
+              <p className="text-sm font-medium text-[#1A1A18] mb-1">Download scans</p>
+              <p className="text-xs text-[#9A9990] mb-3">Download selected scan files individually.</p>
+              <button onClick={handleDownloadScans} disabled={generating||totalSelected===0}
+                className="w-full py-1.5 border border-[#D8D7D0] text-[#4A4A46] text-xs rounded-lg font-medium hover:bg-[#F7F6F3] disabled:opacity-40 disabled:cursor-not-allowed">
+                Download {totalSelected>0?`(${totalSelected})`:""}
               </button>
             </div>
           </div>
-
-          {/* Contact sheet for social */}
-          <div className="bg-white border border-[#E5E4DF] rounded-xl p-4 hover:border-[#C8C7C0] transition-colors">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-[#1A1A18] mb-0.5">Contact sheet for social</p>
-                <p className="text-xs text-[#9A9990]">Same layout, cropped 1:1 for Instagram. Downloads as JPEG.</p>
-              </div>
-              <button
-                onClick={()=>handleContactSheet(true)}
-                disabled={generating || scansAvailable===0}
-                className="flex-shrink-0 px-4 py-1.5 bg-[#1A1A18] text-white text-xs rounded-lg font-medium hover:bg-[#333] disabled:opacity-40 disabled:cursor-not-allowed">
-                {generating ? "Building…" : "Generate"}
-              </button>
-            </div>
-          </div>
-
-          {/* ZIP download */}
-          <div className="bg-white border border-[#E5E4DF] rounded-xl p-4 hover:border-[#C8C7C0] transition-colors">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-[#1A1A18] mb-0.5">Download scans</p>
-                <p className="text-xs text-[#9A9990]">Downloads each scan file individually from the selected roll.</p>
-              </div>
-              <button
-                onClick={handleZipDownload}
-                disabled={generating || scansAvailable===0}
-                className="flex-shrink-0 px-4 py-1.5 border border-[#D8D7D0] text-[#4A4A46] text-xs rounded-lg font-medium hover:bg-[#F7F6F3] disabled:opacity-40 disabled:cursor-not-allowed">
-                Download
-              </button>
-            </div>
-          </div>
-
         </div>
       </div>
 
@@ -889,14 +900,8 @@ function ExportPanel({ rolls, rollScans }) {
                 <p className="text-xs text-[#9A9990] mt-0.5">{previewName}</p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={downloadPreview}
-                  className="px-4 py-1.5 bg-[#1A1A18] text-white text-xs rounded-lg font-medium hover:bg-[#333]">
-                  ↓ Download
-                </button>
-                <button onClick={()=>setPreviewUrl(null)}
-                  className="px-3 py-1.5 border border-[#D8D7D0] text-xs rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">
-                  Close
-                </button>
+                <button onClick={downloadPreview} className="px-4 py-1.5 bg-[#1A1A18] text-white text-xs rounded-lg font-medium hover:bg-[#333]">↓ Download</button>
+                <button onClick={()=>setPreviewUrl(null)} className="px-3 py-1.5 border border-[#D8D7D0] text-xs rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">Close</button>
               </div>
             </div>
             <div className="overflow-auto flex-1 bg-[#F7F6F3] p-4">
