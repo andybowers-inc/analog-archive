@@ -617,7 +617,299 @@ function SessionModal({ session, onSave, onDelete, onClose }) {
   );
 }
 
-// Built-in specs for known stocks — editable per-user overrides stored in localStorage
+// ─── Export Panel ───────────────────────────────────────────────────────────
+function ExportPanel({ rolls, rollScans }) {
+  const [selectedRoll, setSelectedRoll] = useState("all");
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewName, setPreviewName] = useState("");
+  const [generating, setGenerating] = useState(false);
+
+  const developed = rolls.filter(r => r.status === "developed");
+
+  const getScansForRoll = (roll) => (rollScans[roll.id] || []).sort((a,b) => a.frame - b.frame);
+
+  const getRollsToExport = () =>
+    selectedRoll === "all"
+      ? developed.filter(r => (rollScans[r.id]||[]).length > 0)
+      : developed.filter(r => r.id === parseInt(selectedRoll));
+
+  // Build a contact sheet on canvas matching the reference style
+  const buildContactSheet = (roll, scans) => new Promise((resolve) => {
+    const COLS = 3;
+    const ROWS = Math.ceil(scans.length / COLS);
+    const CELL_W = 900;
+    const CELL_H = 1100;
+    const PAD = 48;
+    const LABEL_H = 52;
+    const HEADER_H = 120;
+    const FOOTER_H = 80;
+    const W = COLS * CELL_W + (COLS + 1) * PAD;
+    const H = HEADER_H + ROWS * (CELL_H + LABEL_H + PAD) + PAD + FOOTER_H;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+
+    // White background
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, W, H);
+
+    // Header
+    ctx.fillStyle = "#1A1A18";
+    ctx.font = "bold 52px 'Arial', sans-serif";
+    ctx.fillText(roll.name, PAD, 70);
+    ctx.fillStyle = "#9A9990";
+    ctx.font = "36px 'Arial', sans-serif";
+    ctx.fillText(`${roll.stock} · ${roll.format} · ${roll.date} · ${scans.length} frames`, PAD, 110);
+
+    // Thin rule under header
+    ctx.strokeStyle = "#E5E4DF";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(PAD, HEADER_H - 10);
+    ctx.lineTo(W - PAD, HEADER_H - 10);
+    ctx.stroke();
+
+    const loadImage = (src) => new Promise((res, rej) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => res(img);
+      img.onerror = () => res(null);
+      img.src = src;
+    });
+
+    Promise.all(scans.map(s => loadImage(s.src))).then(images => {
+      scans.forEach((scan, i) => {
+        const col = i % COLS;
+        const row = Math.floor(i / COLS);
+        const x = PAD + col * (CELL_W + PAD);
+        const y = HEADER_H + row * (CELL_H + LABEL_H + PAD);
+
+        // Frame border
+        ctx.strokeStyle = "#E5E4DF";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, CELL_W, CELL_H);
+
+        const img = images[i];
+        if (img) {
+          // Cover-fit image into cell
+          const scale = Math.max(CELL_W / img.width, CELL_H / img.height);
+          const dw = img.width * scale;
+          const dh = img.height * scale;
+          const dx = x + (CELL_W - dw) / 2;
+          const dy = y + (CELL_H - dh) / 2;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(x, y, CELL_W, CELL_H);
+          ctx.clip();
+          ctx.drawImage(img, dx, dy, dw, dh);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = "#F7F6F3";
+          ctx.fillRect(x, y, CELL_W, CELL_H);
+          ctx.fillStyle = "#C0BFB8";
+          ctx.font = "32px Arial";
+          ctx.textAlign = "center";
+          ctx.fillText(`Frame ${scan.frame}`, x + CELL_W/2, y + CELL_H/2);
+          ctx.textAlign = "left";
+        }
+
+        // Label below frame
+        const label = scan.name.replace(/\.[^/.]+$/, "").slice(0, 40);
+        ctx.fillStyle = "#5F5E5A";
+        ctx.font = "28px 'Arial', sans-serif";
+        ctx.fillText(label, x, y + CELL_H + 36);
+      });
+
+      // Footer
+      const now = new Date();
+      const dateStr = `${now.toLocaleDateString("en-US", {year:"numeric",month:"long",day:"numeric"})}`;
+      ctx.fillStyle = "#C0BFB8";
+      ctx.font = "28px Arial";
+      ctx.textAlign = "right";
+      ctx.fillText(`Analog Archive · ${dateStr}`, W - PAD, H - 28);
+      ctx.textAlign = "left";
+
+      resolve(canvas);
+    });
+  });
+
+  const handleContactSheet = async (forSocial = false) => {
+    const exportRolls = getRollsToExport();
+    if (!exportRolls.length) { alert("No scans found for the selected roll."); return; }
+    setGenerating(true);
+    const roll = exportRolls[0];
+    const scans = getScansForRoll(roll);
+    if (!scans.length) { setGenerating(false); alert("No scans uploaded for this roll yet."); return; }
+
+    const canvas = await buildContactSheet(roll, scans);
+
+    if (forSocial) {
+      // 1:1 crop for social
+      const size = Math.min(canvas.width, canvas.height);
+      const sq = document.createElement("canvas");
+      sq.width = size; sq.height = size;
+      sq.getContext("2d").drawImage(canvas, 0, 0);
+      const url = sq.toDataURL("image/jpeg", 0.92);
+      setPreviewUrl(url);
+      setPreviewName(`${roll.name.replace(/\s+/g,"-")}_contact-social.jpg`);
+    } else {
+      const url = canvas.toDataURL("image/jpeg", 0.95);
+      setPreviewUrl(url);
+      setPreviewName(`${roll.name.replace(/\s+/g,"-")}_contact-sheet.jpg`);
+    }
+    setGenerating(false);
+  };
+
+  const handleZipDownload = async () => {
+    const exportRolls = getRollsToExport();
+    if (!exportRolls.length) { alert("No scans found for the selected roll."); return; }
+    setGenerating(true);
+
+    // Build zip using native browser — create a folder of data URLs as individual downloads
+    // (Full JSZip would need npm install — for now download each scan individually)
+    const roll = exportRolls[0];
+    const scans = getScansForRoll(roll);
+    if (!scans.length) { setGenerating(false); alert("No scans uploaded for this roll yet."); return; }
+
+    scans.forEach((scan, i) => {
+      setTimeout(() => {
+        const a = document.createElement("a");
+        a.href = scan.src;
+        a.download = scan.name || `${roll.name}-frame-${scan.frame}.jpg`;
+        a.click();
+      }, i * 300);
+    });
+    setGenerating(false);
+  };
+
+  const downloadPreview = () => {
+    const a = document.createElement("a");
+    a.href = previewUrl;
+    a.download = previewName;
+    a.click();
+  };
+
+  const exportRolls = getRollsToExport();
+  const selectedRollObj = developed.find(r => r.id === parseInt(selectedRoll));
+  const scansAvailable = selectedRoll === "all"
+    ? developed.reduce((n, r) => n + (rollScans[r.id]||[]).length, 0)
+    : (rollScans[parseInt(selectedRoll)]||[]).length;
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="px-6 py-4 border-b border-[#E5E4DF]">
+        <p className="text-[15px] font-medium text-[#1A1A18]">Export</p>
+        <p className="text-xs text-[#9A9990] mt-0.5">Download contact sheets and scan files</p>
+      </div>
+      <div className="p-6 max-w-2xl">
+
+        {/* Roll selector */}
+        <div className="bg-white border border-[#E5E4DF] rounded-xl p-4 mb-4">
+          <p className="text-xs font-medium text-[#9A9990] uppercase tracking-wide mb-2">Select roll to export</p>
+          <select
+            className="w-full px-3 py-2 border border-[#D8D7D0] rounded-lg text-sm bg-[#F7F6F3] text-[#1A1A18] focus:outline-none focus:border-[#1A1A18]"
+            value={selectedRoll} onChange={e=>setSelectedRoll(e.target.value)}>
+            <option value="all">All developed rolls</option>
+            {developed.map(r=>(
+              <option key={r.id} value={r.id}>
+                {r.name} ({(rollScans[r.id]||[]).length} scans)
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-[#9A9990] mt-2">
+            {scansAvailable > 0
+              ? `${scansAvailable} scan${scansAvailable!==1?"s":""} available for export`
+              : "No scans uploaded for this roll yet — go to Scans to upload"}
+          </p>
+        </div>
+
+        {/* Export options */}
+        <div className="flex flex-col gap-3">
+
+          {/* Contact sheet */}
+          <div className="bg-white border border-[#E5E4DF] rounded-xl p-4 hover:border-[#C8C7C0] transition-colors">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-[#1A1A18] mb-0.5">Contact sheet</p>
+                <p className="text-xs text-[#9A9990]">3-column grid with filename labels. White background, archival style. Downloads as JPEG.</p>
+              </div>
+              <button
+                onClick={()=>handleContactSheet(false)}
+                disabled={generating || scansAvailable===0}
+                className="flex-shrink-0 px-4 py-1.5 bg-[#1A1A18] text-white text-xs rounded-lg font-medium hover:bg-[#333] disabled:opacity-40 disabled:cursor-not-allowed">
+                {generating ? "Building…" : "Generate"}
+              </button>
+            </div>
+          </div>
+
+          {/* Contact sheet for social */}
+          <div className="bg-white border border-[#E5E4DF] rounded-xl p-4 hover:border-[#C8C7C0] transition-colors">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-[#1A1A18] mb-0.5">Contact sheet for social</p>
+                <p className="text-xs text-[#9A9990]">Same layout, cropped 1:1 for Instagram. Downloads as JPEG.</p>
+              </div>
+              <button
+                onClick={()=>handleContactSheet(true)}
+                disabled={generating || scansAvailable===0}
+                className="flex-shrink-0 px-4 py-1.5 bg-[#1A1A18] text-white text-xs rounded-lg font-medium hover:bg-[#333] disabled:opacity-40 disabled:cursor-not-allowed">
+                {generating ? "Building…" : "Generate"}
+              </button>
+            </div>
+          </div>
+
+          {/* ZIP download */}
+          <div className="bg-white border border-[#E5E4DF] rounded-xl p-4 hover:border-[#C8C7C0] transition-colors">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-[#1A1A18] mb-0.5">Download scans</p>
+                <p className="text-xs text-[#9A9990]">Downloads each scan file individually from the selected roll.</p>
+              </div>
+              <button
+                onClick={handleZipDownload}
+                disabled={generating || scansAvailable===0}
+                className="flex-shrink-0 px-4 py-1.5 border border-[#D8D7D0] text-[#4A4A46] text-xs rounded-lg font-medium hover:bg-[#F7F6F3] disabled:opacity-40 disabled:cursor-not-allowed">
+                Download
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Preview modal */}
+      {previewUrl && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-6">
+          <div className="bg-white rounded-xl overflow-hidden flex flex-col max-w-4xl w-full max-h-[92vh]">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#E5E4DF]">
+              <div>
+                <p className="text-sm font-medium text-[#1A1A18]">Contact sheet preview</p>
+                <p className="text-xs text-[#9A9990] mt-0.5">{previewName}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={downloadPreview}
+                  className="px-4 py-1.5 bg-[#1A1A18] text-white text-xs rounded-lg font-medium hover:bg-[#333]">
+                  ↓ Download
+                </button>
+                <button onClick={()=>setPreviewUrl(null)}
+                  className="px-3 py-1.5 border border-[#D8D7D0] text-xs rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="overflow-auto flex-1 bg-[#F7F6F3] p-4">
+              <img src={previewUrl} alt="Contact sheet preview" className="w-full rounded-lg shadow-sm"/>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Stocks Panel ────────────────────────────────────────────────────────────
 const DEFAULT_SPECS = {
   "CineStill 400D":   { process:"C-41", type:"Color negative", balance:"Daylight", iso:"400", grain:"Fine", notes:"Remjet-removed cinema stock. Halation at bright edges. Excellent skin tones in natural light." },
   "Kentmere Pan 400": { process:"B&W",  type:"Black & white",  balance:"Panchromatic", iso:"400", grain:"Medium", notes:"Budget B&W with strong contrast. Pushes well to 800 or 1600." },
@@ -1025,19 +1317,7 @@ export default function App() {
         )}
 
         {panel === "export" && (
-          <SimplePanel title="Export" sub="Download your archive in different formats">
-            {[
-              { icon:"⊞", title:"Full archive as CSV", sub:"All rolls, stocks, push/pull notes and metadata" },
-              { icon:"◫", title:"Contact sheet PDF", sub:"Print-ready contact sheets for any roll or session" },
-              { icon:"↓", title:"Raw scans ZIP", sub:"All untouched scan files for a roll or session" },
-              { icon:"◎", title:"Contact sheet for social", sub:"1:1 formatted contact sheet image ready to share" },
-            ].map(e => (
-              <div key={e.title} className="bg-white border border-[#E5E4DF] rounded-xl px-4 py-3.5 flex items-center gap-4 mb-2 cursor-pointer hover:border-[#C8C7C0] transition-colors">
-                <span className="text-xl text-[#9A9990] w-8 text-center">{e.icon}</span>
-                <div><p className="text-sm font-medium text-[#1A1A18]">{e.title}</p><p className="text-xs text-[#9A9990] mt-0.5">{e.sub}</p></div>
-              </div>
-            ))}
-          </SimplePanel>
+          <ExportPanel rolls={rolls} rollScans={rollScans} />
         )}
       </main>
 
