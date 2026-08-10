@@ -633,12 +633,41 @@ export default function App() {
   useEffect(() => {
     setRolls(loadRolls());
     setSessions(loadSessions());
+    // Load persisted scans
+    try {
+      const saved = localStorage.getItem("analog-archive-scans-v1");
+      if (saved) setRollScans(JSON.parse(saved));
+    } catch { /* quota exceeded or parse error — start fresh */ }
   }, []);
 
   const persist = (next) => { setRolls(next); saveRolls(next); };
   const persistSessions = (next) => { setSessions(next); saveSessions(next); };
 
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2000); };
+  const persistScans = (next) => {
+    setRollScans(next);
+    try {
+      localStorage.setItem("analog-archive-scans-v1", JSON.stringify(next));
+    } catch (e) {
+      // localStorage quota hit (images are large) — show warning
+      showToast("Storage full — try removing older scans to free space");
+    }
+  };
+
+  // Compress image src to JPEG at reduced size before saving
+  const compressImage = (src, maxWidth = 1200) => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    img.src = src;
+  });
+
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2500); };
 
   const handleSaveRoll = (form) => {
     const isEdit = typeof rollModal === "number";
@@ -685,19 +714,32 @@ export default function App() {
     showToast("Session deleted");
   };
 
-  const handleAssignScan = (scan) => {
+  const handleAssignScan = async (scan) => {
+    const compressed = await compressImage(scan.src);
+    const saved = { ...scan, src: compressed };
     setRollScans(prev => {
       const existing = prev[scan.rollId] || [];
       const filtered = existing.filter(s => s.frame !== scan.frame);
-      return { ...prev, [scan.rollId]: [...filtered, scan] };
+      const next = { ...prev, [scan.rollId]: [...filtered, saved] };
+      try {
+        localStorage.setItem("analog-archive-scans-v1", JSON.stringify(next));
+      } catch {
+        showToast("Storage full — try removing older scans to free space");
+      }
+      return next;
     });
+    showToast("Scan saved to frame " + scan.frame);
   };
 
   const handleRemoveScan = (rollId, frame) => {
-    setRollScans(prev => ({
-      ...prev,
-      [rollId]: (prev[rollId] || []).filter(s => s.frame !== frame)
-    }));
+    setRollScans(prev => {
+      const next = { ...prev, [rollId]: (prev[rollId] || []).filter(s => s.frame !== frame) };
+      try {
+        localStorage.setItem("analog-archive-scans-v1", JSON.stringify(next));
+      } catch { /* ignore */ }
+      return next;
+    });
+    showToast("Scan removed");
   };
 
   const openDetail = (id) => { setDetailId(id); setPanel("detail"); };
