@@ -41,7 +41,7 @@ function StatusPill({ status }) {
   return <span className={`${PILL_MAP[status]} text-[10px] font-medium px-2 py-0.5 rounded-full`}>{STATUS_LABELS[status]}</span>;
 }
 
-function ContactSheet({ roll, onFrameClick }) {
+function ContactSheet({ roll, rollScans, onFrameClick }) {
   if (roll.status !== "developed") {
     return (
       <div className="border border-dashed border-[#D8D7D0] rounded-xl p-8 text-center text-[#9A9990] text-sm">
@@ -49,17 +49,19 @@ function ContactSheet({ roll, onFrameClick }) {
       </div>
     );
   }
+  const uploadedScans = (rollScans?.[roll.id] || []);
   return (
     <div className="border border-[#E5E4DF] rounded-xl overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2.5 bg-[#F7F6F3] border-b border-[#E5E4DF]">
         <span className="text-xs font-medium text-[#1A1A18]">{roll.frames} frames · {roll.stock} · {roll.format} · {PP_LABELS[roll.pushpull] || "Normal"}</span>
-        <span className="text-xs text-[#9A9990]">Click a frame to view or edit</span>
+        <span className="text-xs text-[#9A9990]">{uploadedScans.length}/{roll.frames} scans uploaded · Click a frame to view or edit</span>
       </div>
       <div className="grid grid-cols-6 gap-px bg-[#E5E4DF]">
         {Array.from({ length: roll.frames }, (_, i) => {
           const n = i + 1;
           const fd = roll.frames_data?.[n] || {};
-          const isColor = n % 4 !== 0 && roll.color;
+          const scan = uploadedScans.find(s => s.frame === n);
+          const isColor = scan ? scan.color : (n % 4 !== 0 && roll.color);
           const flagEl = fd.flag === "star"
             ? <span className="absolute top-0.5 right-1 text-[9px] text-yellow-600">★</span>
             : fd.flag === "reject"
@@ -67,8 +69,12 @@ function ContactSheet({ roll, onFrameClick }) {
             : null;
           return (
             <button key={n} onClick={() => onFrameClick(n)}
-              className="aspect-square bg-[#F7F6F3] hover:bg-[#EEEEE8] flex items-center justify-center relative transition-colors">
-              <span className="text-[9px] text-[#9A9990]">{roll.color ? "▪" : "◆"}</span>
+              className="aspect-square bg-[#F7F6F3] hover:bg-[#EEEEE8] flex items-center justify-center relative transition-colors overflow-hidden">
+              {scan ? (
+                <img src={scan.src} alt={`Frame ${n}`} className="w-full h-full object-cover"/>
+              ) : (
+                <span className="text-[9px] text-[#9A9990]">{roll.color ? "▪" : "◆"}</span>
+              )}
               <span className={`${isColor ? "tag-color" : "tag-bw"} absolute bottom-0.5 left-0.5 text-[8px] px-1 py-px rounded font-medium`}>
                 {isColor ? "C" : "B&W"}
               </span>
@@ -187,7 +193,7 @@ function RollsList({ rolls, activeFilter, onFilter, onRollClick, onEditRoll, onN
   );
 }
 
-function RollDetail({ roll, onBack, onEdit, onFrameClick }) {
+function RollDetail({ roll, rollScans, onBack, onEdit, onFrameClick }) {
   if (!roll) return null;
   const ppLabel = PP_LABELS[roll.pushpull] || "Normal";
   const ppCls = roll.pushpull && roll.pushpull !== "none" ? (roll.pushpull.startsWith("push") ? "push-pill" : "pull-pill") : "";
@@ -238,7 +244,7 @@ function RollDetail({ roll, onBack, onEdit, onFrameClick }) {
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-[#1A1A18]">Contact sheet</p>
         </div>
-        <ContactSheet roll={roll} onFrameClick={onFrameClick}/>
+        <ContactSheet roll={roll} rollScans={rollScans} onFrameClick={onFrameClick}/>
       </div>
     </div>
   );
@@ -266,7 +272,7 @@ function ScansPanel({ rolls, rollScans, onAssignScan, onRemoveScan }) {
           name: file.name,
           src: e.target.result,
           size: file.size,
-          color: !file.name.toLowerCase().includes("bw") && !file.name.toLowerCase().includes("b&w"),
+          color: true, // will be overridden by roll.color on assignment
           rollId: null,
           frame: null,
         }]);
@@ -301,6 +307,7 @@ function ScansPanel({ rolls, rollScans, onAssignScan, onRemoveScan }) {
     const file = e.target.files?.[0];
     if (!file || !pendingSlot.current) return;
     const { rollId, frame } = pendingSlot.current;
+    const roll = rolls.find(r => r.id === rollId);
     const reader = new FileReader();
     reader.onload = (ev) => {
       onAssignScan({
@@ -308,7 +315,7 @@ function ScansPanel({ rolls, rollScans, onAssignScan, onRemoveScan }) {
         name: file.name,
         src: ev.target.result,
         size: file.size,
-        color: !file.name.toLowerCase().includes("bw") && !file.name.toLowerCase().includes("b&w"),
+        color: roll ? roll.color : true,
         rollId,
         frame,
       });
@@ -323,6 +330,7 @@ function ScansPanel({ rolls, rollScans, onAssignScan, onRemoveScan }) {
     setDragOverSlot(null);
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
+    const roll = rolls.find(r => r.id === rollId);
     const reader = new FileReader();
     reader.onload = (ev) => {
       onAssignScan({
@@ -330,7 +338,7 @@ function ScansPanel({ rolls, rollScans, onAssignScan, onRemoveScan }) {
         name: file.name,
         src: ev.target.result,
         size: file.size,
-        color: !file.name.toLowerCase().includes("bw") && !file.name.toLowerCase().includes("b&w"),
+        color: roll ? roll.color : true,
         rollId,
         frame,
       });
@@ -1222,7 +1230,10 @@ export default function App() {
 
   const handleAssignScan = async (scan) => {
     const compressed = await compressImage(scan.src);
-    const saved = { ...scan, src: compressed };
+    // Determine color from the roll itself, not the filename
+    const roll = rolls.find(r => r.id === scan.rollId);
+    const isColor = roll ? roll.color : true;
+    const saved = { ...scan, src: compressed, color: isColor };
     setRollScans(prev => {
       const existing = prev[scan.rollId] || [];
       const filtered = existing.filter(s => s.frame !== scan.frame);
@@ -1273,6 +1284,7 @@ export default function App() {
         {panel === "detail" && (
           <RollDetail
             roll={rolls.find(r=>r.id===detailId)}
+            rollScans={rollScans}
             onBack={()=>setPanel("rolls")}
             onEdit={()=>setRollModal(detailId)}
             onFrameClick={frame=>setLightbox({rollId:detailId,frame})}
