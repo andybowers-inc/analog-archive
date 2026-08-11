@@ -88,12 +88,27 @@ function ContactSheet({ roll, rollScans, onFrameClick }) {
   );
 }
 
-function Dashboard({ rolls, onNewRoll, onViewRolls, onViewScans, onRollClick, onEditRoll }) {
+function Dashboard({ rolls, rollScans, onNewRoll, onViewRolls, onViewScans, onRollClick, onEditRoll }) {
   const developed = rolls.filter(r => r.status === "developed");
   const labCount = rolls.filter(r => r.status === "lab").length;
   const stocks = new Set(rolls.map(r => r.stock)).size;
   const totalScans = developed.reduce((sum, r) => sum + (r.frames || 36), 0);
   const earliestDate = rolls.length > 0 ? [...rolls].sort((a, b) => a.id - b.id)[0].date : "your first roll";
+
+  // Gather all uploaded scans with their roll context, sorted by most recently assigned (id desc)
+  const allUploadedScans = [];
+  developed.forEach(r => {
+    (rollScans[r.id] || []).forEach(scan => {
+      allUploadedScans.push({ ...scan, roll: r });
+    });
+  });
+  allUploadedScans.sort((a, b) => b.id - a.id);
+
+  // 30-day window with fallback to most recent 6 if window is empty
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const recentScans = allUploadedScans.filter(s => s.id > thirtyDaysAgo);
+  const displayScans = recentScans.length > 0 ? recentScans.slice(0, 6) : allUploadedScans.slice(0, 6);
+  const isFiltered = recentScans.length > 0;
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -138,16 +153,29 @@ function Dashboard({ rolls, onNewRoll, onViewRolls, onViewScans, onRollClick, on
         </div>
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-[#1A1A18]">Recent scans</p>
-          <button onClick={onViewScans} className="text-xs text-[#9A9990] hover:text-[#4A4A46]">View all</button>
+          <div className="flex items-center gap-3">
+            {isFiltered && <span className="text-[10px] text-[#9A9990]">Last 30 days</span>}
+            <button onClick={onViewScans} className="text-xs text-[#9A9990] hover:text-[#4A4A46]">View all</button>
+          </div>
         </div>
-        <div className="grid grid-cols-6 gap-2">
-          {developed.slice(0, 6).map((r, i) => (
-            <div key={r.id+i} className="aspect-square bg-white border border-[#E5E4DF] rounded-lg flex items-center justify-center relative overflow-hidden cursor-pointer hover:border-[#C8C7C0]">
-              <span className="text-[9px] text-[#9A9990]">{r.id}-0{i+1}</span>
-              <span className={`${r.color?"tag-color":"tag-bw"} absolute bottom-1 left-1 text-[8px] px-1 py-px rounded font-medium`}>{r.color?"C":"B&W"}</span>
-            </div>
-          ))}
-        </div>
+        {displayScans.length > 0 ? (
+          <div className="grid grid-cols-6 gap-2">
+            {displayScans.map((scan, i) => (
+              <div key={scan.id || i} className="aspect-square bg-white border border-[#E5E4DF] rounded-lg overflow-hidden relative cursor-pointer hover:border-[#C8C7C0]"
+                onClick={() => onRollClick(scan.roll.id)}>
+                <img src={scan.src} alt={scan.name} className="w-full h-full object-cover"/>
+                <span className={`${scan.color ? "tag-color" : "tag-bw"} absolute bottom-1 left-1 text-[8px] px-1 py-px rounded font-medium`}>
+                  {scan.color ? "C" : "B&W"}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white border border-dashed border-[#D8D7D0] rounded-xl p-6 text-center">
+            <p className="text-sm text-[#9A9990]">No scans uploaded yet</p>
+            <p className="text-xs text-[#C0BFB8] mt-1">Upload scans in the Scans tab to see them here</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1273,7 +1301,7 @@ export default function App() {
 
       <main className="flex-1 overflow-hidden flex flex-col">
         {panel === "dashboard" && (
-          <Dashboard rolls={rolls} onNewRoll={()=>setRollModal("new")}
+          <Dashboard rolls={rolls} rollScans={rollScans} onNewRoll={()=>setRollModal("new")}
             onViewRolls={()=>setPanel("rolls")} onViewScans={()=>setPanel("scans")}
             onRollClick={openDetail} onEditRoll={id=>setRollModal(id)}/>
         )}
