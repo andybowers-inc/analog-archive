@@ -8,6 +8,7 @@ import {
   loadRolls, saveRolls,
   THUMB_BGS, STATUS_LABELS, PILL_MAP, DOT_COLORS, PP_LABELS,
 } from "../lib/store";
+import { saveScans, loadScans } from "../lib/scanStorage";
 
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const nowDate = () => `${months[new Date().getMonth()]} ${new Date().getFullYear()}`;
@@ -1146,11 +1147,8 @@ export default function App() {
   useEffect(() => {
     setRolls(loadRolls());
     setSessions(loadSessions());
-    // Load persisted scans
-    try {
-      const saved = localStorage.getItem("analog-archive-scans-v1");
-      if (saved) setRollScans(JSON.parse(saved));
-    } catch { /* quota exceeded or parse error — start fresh */ }
+    // Load persisted scans from IndexedDB (no size limit)
+    loadScans().then(data => setRollScans(data || {}));
   }, []);
 
   const persist = (next) => { setRolls(next); saveRolls(next); };
@@ -1158,12 +1156,7 @@ export default function App() {
 
   const persistScans = (next) => {
     setRollScans(next);
-    try {
-      localStorage.setItem("analog-archive-scans-v1", JSON.stringify(next));
-    } catch (e) {
-      // localStorage quota hit (images are large) — show warning
-      showToast("Storage full — try removing older scans to free space");
-    }
+    saveScans(next).catch(() => showToast("Error saving scan — please try again"));
   };
 
   // Compress image src to JPEG at reduced size before saving
@@ -1234,11 +1227,7 @@ export default function App() {
       const existing = prev[scan.rollId] || [];
       const filtered = existing.filter(s => s.frame !== scan.frame);
       const next = { ...prev, [scan.rollId]: [...filtered, saved] };
-      try {
-        localStorage.setItem("analog-archive-scans-v1", JSON.stringify(next));
-      } catch {
-        showToast("Storage full — try removing older scans to free space");
-      }
+      saveScans(next).catch(() => showToast("Error saving scan — please try again"));
       return next;
     });
     showToast("Scan saved to frame " + scan.frame);
@@ -1247,9 +1236,7 @@ export default function App() {
   const handleRemoveScan = (rollId, frame) => {
     setRollScans(prev => {
       const next = { ...prev, [rollId]: (prev[rollId] || []).filter(s => s.frame !== frame) };
-      try {
-        localStorage.setItem("analog-archive-scans-v1", JSON.stringify(next));
-      } catch { /* ignore */ }
+      saveScans(next).catch(() => {});
       return next;
     });
     showToast("Scan removed");
