@@ -117,42 +117,6 @@ function Dashboard({ rolls, rollScans, onNewRoll, onViewRolls, onViewScans, onRo
         <button onClick={onNewRoll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">+ Add roll</button>
       </div>
       <div className="p-6">
-
-        {/* Logo hero */}
-        <div className="flex items-center gap-6 mb-8 pb-7 border-b border-[#E5E4DF]">
-          {/* Film frame SVG */}
-          <svg width="64" height="72" viewBox="0 0 64 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {/* Film strip base */}
-            <rect x="0" y="0" width="64" height="72" rx="3" fill="#1A1A18"/>
-            {/* Sprocket holes left */}
-            <rect x="4" y="8"  width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
-            <rect x="4" y="22" width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
-            <rect x="4" y="36" width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
-            <rect x="4" y="50" width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
-            <rect x="4" y="64" width="6" height="5" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
-            {/* Sprocket holes right */}
-            <rect x="54" y="8"  width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
-            <rect x="54" y="22" width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
-            <rect x="54" y="36" width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
-            <rect x="54" y="50" width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
-            <rect x="54" y="64" width="6" height="5" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
-            {/* Frame window — white */}
-            <rect x="13" y="8" width="38" height="56" rx="1" fill="#F7F6F3"/>
-            {/* Inner frame border */}
-            <rect x="14" y="9" width="36" height="54" rx="0.5" fill="none" stroke="#1A1A18" strokeWidth="0.5" opacity="0.15"/>
-          </svg>
-
-          {/* Logotype */}
-          <div>
-            <p style={{fontFamily:"'Inter', sans-serif", fontWeight:600, fontSize:"28px", letterSpacing:"-0.02em", color:"#1A1A18", lineHeight:1.1}}>
-              Analog Archive
-            </p>
-            <p style={{fontFamily:"'Inter', sans-serif", fontWeight:400, fontSize:"13px", color:"#9A9990", letterSpacing:"0.01em", marginTop:"5px"}}>
-              Film management
-            </p>
-          </div>
-        </div>
-        {/* Stats */}
         <div className="grid grid-cols-4 gap-3 mb-6">
           {[
             { label:"Total rolls", value: rolls.length, detail:`Since ${earliestDate}` },
