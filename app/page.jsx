@@ -1181,10 +1181,24 @@ export default function App() {
   const [toast, setToast] = useState("");
 
   useEffect(() => {
-    setRolls(loadRolls());
+    const rollData = loadRolls();
+    setRolls(rollData);
     setSessions(loadSessions());
-    // Load persisted scans from IndexedDB (no size limit)
-    loadScans().then(data => setRollScans(data || {}));
+    loadScans().then(data => {
+      if (!data) { setRollScans({}); return; }
+      // Correct color flag on all saved scans using the roll's actual color property
+      const corrected = {};
+      Object.entries(data).forEach(([rollId, scans]) => {
+        const roll = rollData.find(r => r.id === parseInt(rollId));
+        corrected[rollId] = (scans || []).map(s => ({
+          ...s,
+          color: roll ? roll.color : s.color,
+        }));
+      });
+      setRollScans(corrected);
+      // Persist the corrected data back so future loads are clean
+      saveScans(corrected).catch(() => {});
+    });
   }, []);
 
   const persist = (next) => { setRolls(next); saveRolls(next); };
