@@ -117,6 +117,42 @@ function Dashboard({ rolls, rollScans, onNewRoll, onViewRolls, onViewScans, onRo
         <button onClick={onNewRoll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">+ Add roll</button>
       </div>
       <div className="p-6">
+
+        {/* Logo hero */}
+        <div className="flex items-center gap-6 mb-8 pb-7 border-b border-[#E5E4DF]">
+          {/* Film frame SVG */}
+          <svg width="64" height="72" viewBox="0 0 64 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* Film strip base */}
+            <rect x="0" y="0" width="64" height="72" rx="3" fill="#1A1A18"/>
+            {/* Sprocket holes left */}
+            <rect x="4" y="8"  width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
+            <rect x="4" y="22" width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
+            <rect x="4" y="36" width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
+            <rect x="4" y="50" width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
+            <rect x="4" y="64" width="6" height="5" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
+            {/* Sprocket holes right */}
+            <rect x="54" y="8"  width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
+            <rect x="54" y="22" width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
+            <rect x="54" y="36" width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
+            <rect x="54" y="50" width="6" height="8" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
+            <rect x="54" y="64" width="6" height="5" rx="1.5" fill="#F7F6F3" opacity="0.25"/>
+            {/* Frame window — white */}
+            <rect x="13" y="8" width="38" height="56" rx="1" fill="#F7F6F3"/>
+            {/* Inner frame border */}
+            <rect x="14" y="9" width="36" height="54" rx="0.5" fill="none" stroke="#1A1A18" strokeWidth="0.5" opacity="0.15"/>
+          </svg>
+
+          {/* Logotype */}
+          <div>
+            <p style={{fontFamily:"'Inter', sans-serif", fontWeight:600, fontSize:"28px", letterSpacing:"-0.02em", color:"#1A1A18", lineHeight:1.1}}>
+              Analog Archive
+            </p>
+            <p style={{fontFamily:"'Inter', sans-serif", fontWeight:400, fontSize:"13px", color:"#9A9990", letterSpacing:"0.01em", marginTop:"5px"}}>
+              Film management
+            </p>
+          </div>
+        </div>
+        {/* Stats */}
         <div className="grid grid-cols-4 gap-3 mb-6">
           {[
             { label:"Total rolls", value: rolls.length, detail:`Since ${earliestDate}` },
@@ -797,16 +833,102 @@ function ExportPanel({ rolls, rollScans }) {
     setGenerating(false);
   };
 
+  const buildXMP = (scan, roll) => {
+    const slug = (str) => (str||"").replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
+    const keywords = [
+      roll.rollStock,
+      roll.rollFormat,
+      roll.rollDate,
+      roll.camera,
+      roll.lens,
+      roll.rollName,
+      roll.pushpull && roll.pushpull !== "none" ? PP_LABELS[roll.pushpull] : null,
+      roll.session || null,
+      roll.location || null,
+      scan.color ? "color" : "black and white",
+      "analog",
+      "film",
+    ].filter(Boolean);
+
+    return `<?xpacket begin='' id='W5M0MpCehiHzreSzNTczkc9d'?>
+<x:xmpmeta xmlns:x='adobe:ns:meta/'>
+  <rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>
+    <rdf:Description rdf:about=''
+      xmlns:dc='http://purl.org/dc/elements/1.1/'
+      xmlns:xmp='http://ns.adobe.com/xap/1.0/'
+      xmlns:lr='http://ns.adobe.com/lightroom/1.0/'
+      xmlns:exif='http://ns.adobe.com/exif/1.0/'>
+      <dc:title><rdf:Alt><rdf:li xml:lang='x-default'>${scan.rollName} — Frame ${scan.frame}</rdf:li></rdf:Alt></dc:title>
+      <dc:description><rdf:Alt><rdf:li xml:lang='x-default'>${roll.rollStock} · ${roll.rollFormat} · ${roll.rollDate}${roll.location ? " · " + roll.location : ""}</rdf:li></rdf:Alt></dc:description>
+      <dc:subject>
+        <rdf:Bag>
+          ${keywords.map(k => `<rdf:li>${k}</rdf:li>`).join("\n          ")}
+        </rdf:Bag>
+      </dc:subject>
+      <xmp:CreatorTool>Analog Archive</xmp:CreatorTool>
+      <lr:hierarchicalSubject>
+        <rdf:Bag>
+          <rdf:li>Analog Archive|${roll.rollName}</rdf:li>
+          <rdf:li>Film Stock|${roll.rollStock}</rdf:li>
+          <rdf:li>Format|${roll.rollFormat}</rdf:li>
+        </rdf:Bag>
+      </lr:hierarchicalSubject>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end='w'?>`;
+  };
+
   const handleDownloadScans = () => {
     const scans = getSelectedScanObjects();
     if (!scans.length) return;
-    scans.forEach((scan, i) => {
-      setTimeout(() => {
-        const a = document.createElement("a");
-        a.href = scan.src;
-        a.download = scan.name || `frame-${scan.frame}.jpg`;
-        a.click();
-      }, i * 300);
+
+    // Group by roll for folder-style naming
+    const byRoll = {};
+    scans.forEach(scan => {
+      const key = scan.rollId;
+      if (!byRoll[key]) byRoll[key] = { roll: scan, scans: [] };
+      byRoll[key].scans.push(scan);
+    });
+
+    let delay = 0;
+    Object.values(byRoll).forEach(({ roll, scans: rollScansGroup }) => {
+      // Sanitize roll name for filename
+      const rollSlug = roll.rollName
+        .replace(/[^a-zA-Z0-9\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .toLowerCase();
+      const stockSlug = roll.rollStock
+        .replace(/[^a-zA-Z0-9]/g, "")
+        .toLowerCase();
+
+      rollScansGroup.forEach((scan) => {
+        const frameNum = String(scan.frame).padStart(2, "0");
+        const filename = `${rollSlug}_${stockSlug}_${roll.rollFormat}_frame-${frameNum}.jpg`;
+        const xmpFilename = `${rollSlug}_${stockSlug}_${roll.rollFormat}_frame-${frameNum}.xmp`;
+
+        // Download image with structured filename
+        setTimeout(() => {
+          const a = document.createElement("a");
+          a.href = scan.src;
+          a.download = filename;
+          a.click();
+        }, delay);
+        delay += 250;
+
+        // Download XMP sidecar for Lightroom metadata
+        setTimeout(() => {
+          const xmpContent = buildXMP(scan, roll);
+          const blob = new Blob([xmpContent], { type: "application/xml" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = xmpFilename;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }, delay);
+        delay += 250;
+      });
     });
   };
 
@@ -916,12 +1038,15 @@ function ExportPanel({ rolls, rollScans }) {
               </button>
             </div>
             <div className="bg-white border border-[#E5E4DF] rounded-xl p-4">
-              <p className="text-sm font-medium text-[#1A1A18] mb-1">Download scans</p>
-              <p className="text-xs text-[#9A9990] mb-3">Download selected scan files individually.</p>
+              <p className="text-sm font-medium text-[#1A1A18] mb-1">Download for Lightroom</p>
+              <p className="text-xs text-[#9A9990] mb-3">Structured filenames + XMP sidecar files with roll, stock, camera, and keyword metadata pre-embedded.</p>
               <button onClick={handleDownloadScans} disabled={generating||totalSelected===0}
                 className="w-full py-1.5 border border-[#D8D7D0] text-[#4A4A46] text-xs rounded-lg font-medium hover:bg-[#F7F6F3] disabled:opacity-40 disabled:cursor-not-allowed">
-                Download {totalSelected>0?`(${totalSelected})`:""}
+                Download {totalSelected>0?`(${totalSelected} scans)`:""}
               </button>
+              {totalSelected > 0 && (
+                <p className="text-[10px] text-[#C0BFB8] mt-2 leading-relaxed">Each scan downloads with a paired .xmp file. Place both in the same folder, then import the folder into Lightroom.</p>
+              )}
             </div>
           </div>
         </div>
