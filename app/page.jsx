@@ -136,22 +136,30 @@ function Dashboard({ rolls, rollScans, onNewRoll, onViewRolls, onViewScans, onRo
           <p className="text-sm font-medium text-[#1A1A18]">Recent rolls</p>
           <button onClick={onViewRolls} className="text-xs text-[#9A9990] hover:text-[#4A4A46]">View all</button>
         </div>
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          {rolls.slice(0, 3).map(r => (
-            <div key={r.id} className="bg-white border border-[#E5E4DF] rounded-xl overflow-hidden cursor-pointer hover:border-[#C8C7C0] transition-colors relative group" onClick={() => onRollClick(r.id)}>
-              <button className="absolute top-1.5 left-1.5 opacity-0 group-hover:opacity-100 bg-white border border-[#E5E4DF] rounded px-1.5 py-0.5 text-[10px] text-[#4A4A46] hover:bg-[#F7F6F3] z-10 transition-opacity"
-                onClick={e=>{e.stopPropagation();onEditRoll(r.id);}}>✎ Edit</button>
-              <div className="flex items-center justify-center relative" style={{height:72,background:THUMB_BGS[r.stock]||"#F1EFE8"}}>
-                <span className="text-[10px] font-medium text-[#4A4A46] uppercase tracking-wide">{r.stock}</span>
-                <span className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{background:DOT_COLORS[r.status]}}/>
+        {rolls.length === 0 ? (
+          <div className="bg-white border border-dashed border-[#D8D7D0] rounded-xl p-8 text-center mb-6">
+            <p className="text-sm font-medium text-[#1A1A18] mb-1">No rolls yet</p>
+            <p className="text-xs text-[#9A9990] mb-4">Add your first roll to start building your archive</p>
+            <button onClick={onNewRoll} className="px-4 py-2 bg-[#1A1A18] text-white text-xs rounded-lg font-medium hover:bg-[#333]">+ Add your first roll</button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            {rolls.slice(0, 3).map(r => (
+              <div key={r.id} className="bg-white border border-[#E5E4DF] rounded-xl overflow-hidden cursor-pointer hover:border-[#C8C7C0] transition-colors relative group" onClick={() => onRollClick(r.id)}>
+                <button className="absolute top-1.5 left-1.5 opacity-0 group-hover:opacity-100 bg-white border border-[#E5E4DF] rounded px-1.5 py-0.5 text-[10px] text-[#4A4A46] hover:bg-[#F7F6F3] z-10 transition-opacity"
+                  onClick={e=>{e.stopPropagation();onEditRoll(r.id);}}>✎ Edit</button>
+                <div className="flex items-center justify-center relative" style={{height:72,background:THUMB_BGS[r.stock]||"#F1EFE8"}}>
+                  <span className="text-[10px] font-medium text-[#4A4A46] uppercase tracking-wide">{r.stock}</span>
+                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{background:DOT_COLORS[r.status]}}/>
+                </div>
+                <div className="p-2.5">
+                  <p className="text-xs font-medium text-[#1A1A18] truncate">{r.name}</p>
+                  <p className="text-[11px] text-[#9A9990] mt-0.5">{r.format} · {r.date}</p>
+                </div>
               </div>
-              <div className="p-2.5">
-                <p className="text-xs font-medium text-[#1A1A18] truncate">{r.name}</p>
-                <p className="text-[11px] text-[#9A9990] mt-0.5">{r.format} · {r.date}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-[#1A1A18]">Recent scans</p>
           <div className="flex items-center gap-3">
