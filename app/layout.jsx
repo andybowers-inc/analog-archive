@@ -1,4 +1,5 @@
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata = {
   title: "Analog Archive",
@@ -23,8 +24,10 @@ export default function RootLayout({ children }) {
         <meta name="theme-color" content="#1A1A18" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
       </head>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
-import { Analytics } from "@vercel/analytics/next"
