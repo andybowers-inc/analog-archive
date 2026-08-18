@@ -13,7 +13,6 @@ const PUSHPULL = [
   { value:"pull1", label:"Pull -1" },
   { value:"pull2", label:"Pull -2" },
 ];
-const SESSIONS = ["— none —","Portraits of Aēmoni","TWA Terminal editorial","Stadium series"];
 const STATUSES = [
   { value:"shot",      label:"Shot — not yet sent" },
   { value:"lab",       label:"At lab" },
@@ -29,7 +28,7 @@ const EMPTY = {
   location:"", notes:"",
 };
 
-export default function RollModal({ roll, onSave, onDelete, onClose }) {
+export default function RollModal({ roll, sessions = [], onSave, onDelete, onClose }) {
   const [form, setForm] = useState(EMPTY);
   const isEdit = !!roll;
 
@@ -136,7 +135,8 @@ export default function RollModal({ roll, onSave, onDelete, onClose }) {
             <div>
               <label className={lbl}>Session</label>
               <select className={inp} value={form.session} onChange={e=>set("session",e.target.value)}>
-                {SESSIONS.map(s=><option key={s}>{s}</option>)}
+                <option value="">— none —</option>
+                {sessions.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
               </select>
             </div>
             <div>
