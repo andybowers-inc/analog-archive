@@ -13,11 +13,8 @@ import { saveScans, loadScans } from "../lib/scanStorage";
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const nowDate = () => `${months[new Date().getMonth()]} ${new Date().getFullYear()}`;
 
-const SEED_SESSIONS = [
-  { id: 1, name: "Portraits of Aēmoni", location: "Bushwick Studio", date: "Jul 2025", rolls: 2, status: "developed" },
-  { id: 2, name: "TWA Terminal editorial", location: "JFK Airport", date: "Aug 2025", rolls: 1, status: "lab" },
-  { id: 3, name: "Stadium series", location: "Citi Field", date: "Sep 2025", rolls: 3, status: "shot" },
-];
+// Empty seed — every user starts with no sessions
+const SEED_SESSIONS = [];
 
 function loadSessions() {
   if (typeof window === "undefined") return SEED_SESSIONS;
@@ -1439,19 +1436,27 @@ export default function App() {
               <button onClick={()=>setSessionModal({})} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">+ New session</button>
             </div>
             <div className="p-6 flex flex-col gap-2">
-              {sessions.map(s => (
-                <div key={s.id} className="bg-white border border-[#E5E4DF] rounded-xl px-4 py-3 flex items-center gap-4 hover:border-[#C8C7C0] transition-colors">
-                  <div className="w-9 h-9 rounded-lg bg-[#F7F6F3] flex items-center justify-center text-[#9A9990] flex-shrink-0">⊟</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#1A1A18]">{s.name}</p>
-                    <p className="text-xs text-[#9A9990] mt-0.5">{s.location} · {s.date} · {s.rolls} roll{s.rolls !== 1 ? "s" : ""}</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <StatusPill status={s.status}/>
-                    <button onClick={()=>setSessionModal(s)} className="text-xs px-2.5 py-1 border border-[#D8D7D0] rounded-lg text-[#9A9990] hover:text-[#1A1A18] hover:border-[#C8C7C0]">✎ Edit</button>
-                  </div>
+              {sessions.length === 0 ? (
+                <div className="bg-white border border-dashed border-[#D8D7D0] rounded-xl p-8 text-center">
+                  <p className="text-sm font-medium text-[#1A1A18] mb-1">No sessions yet</p>
+                  <p className="text-xs text-[#9A9990] mb-4">Group your rolls by shoot to keep your archive organized</p>
+                  <button onClick={()=>setSessionModal({})} className="px-4 py-2 bg-[#1A1A18] text-white text-xs rounded-lg font-medium hover:bg-[#333]">+ Create your first session</button>
                 </div>
-              ))}
+              ) : (
+                sessions.map(s => (
+                  <div key={s.id} className="bg-white border border-[#E5E4DF] rounded-xl px-4 py-3 flex items-center gap-4 hover:border-[#C8C7C0] transition-colors">
+                    <div className="w-9 h-9 rounded-lg bg-[#F7F6F3] flex items-center justify-center text-[#9A9990] flex-shrink-0">⊟</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#1A1A18]">{s.name}</p>
+                      <p className="text-xs text-[#9A9990] mt-0.5">{s.location} · {s.date} · {s.rolls} roll{s.rolls !== 1 ? "s" : ""}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <StatusPill status={s.status}/>
+                      <button onClick={()=>setSessionModal(s)} className="text-xs px-2.5 py-1 border border-[#D8D7D0] rounded-lg text-[#9A9990] hover:text-[#1A1A18] hover:border-[#C8C7C0]">✎ Edit</button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -1466,7 +1471,7 @@ export default function App() {
       </main>
 
       {rollModal !== null && (
-        <RollModal roll={editingRoll} onSave={handleSaveRoll} onDelete={handleDeleteRoll} onClose={() => setRollModal(null)}/>
+        <RollModal roll={editingRoll} sessions={sessions} onSave={handleSaveRoll} onDelete={handleDeleteRoll} onClose={() => setRollModal(null)}/>
       )}
       {frameModal && (
         <FrameModal roll={rolls.find(r=>r.id===frameModal.rollId)} frame={frameModal.frame} onSave={handleSaveFrame} onClose={() => setFrameModal(null)}/>
