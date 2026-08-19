@@ -65,6 +65,7 @@ const EMPTY = {
   name:"", stock:"", format:"35mm",
   camera:"", lens:"", iso:"", box:"",
   frames: 36,
+  year: new Date().getFullYear().toString(),
   pushpull:"none", process:"C-41",
   session:"", status:"shot",
   location:"", notes:"",
@@ -200,11 +201,20 @@ export default function RollModal({ roll, sessions = [], onSave, onDelete, onClo
               </select>
             </div>
           </div>
-          <div className="mb-3">
-            <label className={lbl}>Location shot</label>
-            <input className={inp} type="text" value={form.location}
-              onChange={e=>set("location",e.target.value)}
-              placeholder="e.g. Bushwick Studio, Brooklyn"/>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className={lbl}>Year shot</label>
+              <input className={inp} type="number" min="1900" max="2100"
+                value={form.year||""}
+                onChange={e=>set("year",e.target.value)}
+                placeholder={new Date().getFullYear().toString()}/>
+            </div>
+            <div>
+              <label className={lbl}>Location shot</label>
+              <input className={inp} type="text" value={form.location}
+                onChange={e=>set("location",e.target.value)}
+                placeholder="e.g. Bushwick Studio, Brooklyn"/>
+            </div>
           </div>
           <div className="mb-1">
             <label className={lbl}>Notes</label>
