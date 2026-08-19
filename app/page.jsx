@@ -1082,7 +1082,11 @@ function StocksPanel({ rolls }) {
   });
   const stocks = Object.values(stockMap).sort((a,b) => b.rolls.length - a.rolls.length);
 
-  const getSpecs = (name) => ({ ...DEFAULT_SPECS[name], ...overrides[name] });
+const getSpecs = (name) => ({
+  process: "", iso: "", type: "", balance: "", grain: "", notes: "",
+  ...DEFAULT_SPECS[name],
+  ...overrides[name],
+});
 
   const saveEdit = (name, form) => {
     const next = { ...overrides, [name]: form };
