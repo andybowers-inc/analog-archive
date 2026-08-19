@@ -151,7 +151,7 @@ function Dashboard({ rolls, rollScans, onNewRoll, onViewRolls, onViewScans, onRo
                 </div>
                 <div className="p-2.5">
                   <p className="text-xs font-medium text-[#1A1A18] truncate">{r.name}</p>
-                  <p className="text-[11px] text-[#9A9990] mt-0.5">{r.format} · {r.date}</p>
+                  <p className="text-[11px] text-[#9A9990] mt-0.5">{r.format} · {r.year || r.date}</p>
                 </div>
               </div>
             ))}
@@ -212,7 +212,7 @@ function RollsList({ rolls, activeFilter, onFilter, onRollClick, onEditRoll, onN
               </div>
               <div className="flex-1 min-w-0 cursor-pointer" onClick={()=>onRollClick(r.id)}>
                 <p className="text-sm font-medium text-[#1A1A18] truncate">{r.name}</p>
-                <p className="text-xs text-[#9A9990] mt-0.5">{r.stock} · {r.camera} · {r.format}{r.location ? " · "+r.location : ""}</p>
+                <p className="text-xs text-[#9A9990] mt-0.5">{r.stock} · {r.camera} · {r.format}{r.year ? " · "+r.year : r.date ? " · "+r.date : ""}{r.location ? " · "+r.location : ""}</p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <PushPill pp={r.pushpull}/>
@@ -247,7 +247,7 @@ function RollDetail({ roll, rollScans, onBack, onEdit, onFrameClick }) {
             <span className="text-[9px] font-medium text-[#4A4A46] uppercase tracking-wide text-center leading-relaxed px-1">{roll.stock}</span>
           </div>
           <div className="grid grid-cols-3 gap-x-6 gap-y-3 flex-1">
-            {[["Camera",roll.camera],["Lens",roll.lens||"—"],["Format",roll.format],["ISO metered",roll.iso],["Box speed",roll.box||"—"],["Dev process",roll.process]].map(([l,v])=>(
+            {[["Camera",roll.camera],["Lens",roll.lens||"—"],["Format",roll.format],["ISO metered",roll.iso],["Box speed",roll.box||"—"],["Dev process",roll.process],["Year shot",roll.year||roll.date||"—"]].map(([l,v])=>(
               <div key={l}>
                 <p className="text-[10px] font-medium text-[#9A9990] uppercase tracking-wide mb-0.5">{l}</p>
                 <p className="text-sm font-medium text-[#1A1A18]">{v}</p>
@@ -1082,11 +1082,7 @@ function StocksPanel({ rolls }) {
   });
   const stocks = Object.values(stockMap).sort((a,b) => b.rolls.length - a.rolls.length);
 
-const getSpecs = (name) => ({
-  process: "", iso: "", type: "", balance: "", grain: "", notes: "",
-  ...DEFAULT_SPECS[name],
-  ...overrides[name],
-});
+  const getSpecs = (name) => ({ ...DEFAULT_SPECS[name], ...overrides[name] });
 
   const saveEdit = (name, form) => {
     const next = { ...overrides, [name]: form };
