@@ -188,14 +188,56 @@ function Dashboard({ rolls, rollScans, onNewRoll, onViewRolls, onViewScans, onRo
 }
 
 function RollsList({ rolls, activeFilter, onFilter, onRollClick, onEditRoll, onNewRoll }) {
-  const filtered = activeFilter === "all" ? rolls : rolls.filter(r => r.status === activeFilter);
+  const [query, setQuery] = useState("");
+
+  const statusFiltered = activeFilter === "all" ? rolls : rolls.filter(r => r.status === activeFilter);
+
+  const filtered = query.trim() === "" ? statusFiltered : statusFiltered.filter(r => {
+    const q = query.toLowerCase();
+    return (
+      r.name?.toLowerCase().includes(q) ||
+      r.stock?.toLowerCase().includes(q) ||
+      r.camera?.toLowerCase().includes(q) ||
+      r.lens?.toLowerCase().includes(q) ||
+      r.format?.toLowerCase().includes(q) ||
+      r.location?.toLowerCase().includes(q) ||
+      r.session?.toLowerCase().includes(q) ||
+      r.notes?.toLowerCase().includes(q) ||
+      r.year?.toString().includes(q) ||
+      r.date?.toLowerCase().includes(q) ||
+      r.status?.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E4DF]">
-        <div><p className="text-[15px] font-medium text-[#1A1A18]">Rolls</p><p className="text-xs text-[#9A9990] mt-0.5">{filtered.length} roll{filtered.length !== 1 ? "s" : ""}</p></div>
+        <div>
+          <p className="text-[15px] font-medium text-[#1A1A18]">Rolls</p>
+          <p className="text-xs text-[#9A9990] mt-0.5">
+            {filtered.length} roll{filtered.length !== 1 ? "s" : ""}{query ? ` matching "${query}"` : ""}
+          </p>
+        </div>
         <button onClick={onNewRoll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[#D8D7D0] rounded-lg text-[#4A4A46] hover:bg-[#F7F6F3]">+ Add roll</button>
       </div>
       <div className="p-6">
+        {/* Search bar */}
+        <div className="relative mb-4">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9A9990] text-sm pointer-events-none">⌕</span>
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search by name, stock, camera, location, year…"
+            className="w-full pl-8 pr-8 py-2 border border-[#D8D7D0] rounded-lg text-sm bg-white text-[#1A1A18] placeholder-[#C0BFB8] focus:outline-none focus:border-[#1A1A18] transition-colors"
+          />
+          {query && (
+            <button onClick={() => setQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9A9990] hover:text-[#1A1A18] text-sm leading-none">✕</button>
+          )}
+        </div>
+
+        {/* Status filters */}
         <div className="flex gap-1.5 mb-4 flex-wrap">
           {["all","developed","lab","shot"].map(f => (
             <button key={f} onClick={() => onFilter(f)}
@@ -204,24 +246,39 @@ function RollsList({ rolls, activeFilter, onFilter, onRollClick, onEditRoll, onN
             </button>
           ))}
         </div>
-        <div className="flex flex-col gap-2">
-          {filtered.map(r => (
-            <div key={r.id} className="bg-white border border-[#E5E4DF] rounded-xl px-4 py-3 flex items-center gap-4 hover:border-[#C8C7C0] transition-colors">
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-[#9A9990] cursor-pointer" style={{background:THUMB_BGS[r.stock]||"#F1EFE8"}} onClick={()=>onRollClick(r.id)}>
-                <span className="text-xs">⊡</span>
+
+        {filtered.length === 0 ? (
+          <div className="bg-white border border-dashed border-[#D8D7D0] rounded-xl p-8 text-center">
+            {query ? (
+              <>
+                <p className="text-sm font-medium text-[#1A1A18] mb-1">No rolls found</p>
+                <p className="text-xs text-[#9A9990]">No rolls match "{query}" — try a different search term</p>
+                <button onClick={() => setQuery("")} className="mt-3 text-xs text-[#4A4A46] border border-[#D8D7D0] px-3 py-1.5 rounded-lg hover:bg-[#F7F6F3]">Clear search</button>
+              </>
+            ) : (
+              <p className="text-sm text-[#9A9990]">No rolls yet — add your first roll to get started.</p>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {filtered.map(r => (
+              <div key={r.id} className="bg-white border border-[#E5E4DF] rounded-xl px-4 py-3 flex items-center gap-4 hover:border-[#C8C7C0] transition-colors">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-[#9A9990] cursor-pointer" style={{background:THUMB_BGS[r.stock]||"#F1EFE8"}} onClick={()=>onRollClick(r.id)}>
+                  <span className="text-xs">⊡</span>
+                </div>
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={()=>onRollClick(r.id)}>
+                  <p className="text-sm font-medium text-[#1A1A18] truncate">{r.name}</p>
+                  <p className="text-xs text-[#9A9990] mt-0.5">{r.stock} · {r.camera} · {r.format}{r.year ? " · "+r.year : r.date ? " · "+r.date : ""}{r.location ? " · "+r.location : ""}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <PushPill pp={r.pushpull}/>
+                  <StatusPill status={r.status}/>
+                  <button onClick={()=>onEditRoll(r.id)} className="text-xs px-2.5 py-1 border border-[#D8D7D0] rounded-lg text-[#9A9990] hover:text-[#1A1A18] hover:border-[#C8C7C0] flex items-center gap-1">✎ Edit</button>
+                </div>
               </div>
-              <div className="flex-1 min-w-0 cursor-pointer" onClick={()=>onRollClick(r.id)}>
-                <p className="text-sm font-medium text-[#1A1A18] truncate">{r.name}</p>
-                <p className="text-xs text-[#9A9990] mt-0.5">{r.stock} · {r.camera} · {r.format}{r.year ? " · "+r.year : r.date ? " · "+r.date : ""}{r.location ? " · "+r.location : ""}</p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <PushPill pp={r.pushpull}/>
-                <StatusPill status={r.status}/>
-                <button onClick={()=>onEditRoll(r.id)} className="text-xs px-2.5 py-1 border border-[#D8D7D0] rounded-lg text-[#9A9990] hover:text-[#1A1A18] hover:border-[#C8C7C0] flex items-center gap-1">✎ Edit</button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
